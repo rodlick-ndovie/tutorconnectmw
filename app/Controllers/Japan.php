@@ -245,6 +245,8 @@ class Japan extends BaseController
 
         $results = [];
         $error = null;
+        $paymentAccessRecord = null;
+        $paymentNotice = null;
 
         if ($reference !== '') {
             $record = $this->applicationModel->where('application_reference', $reference)->first();
@@ -261,7 +263,30 @@ class Japan extends BaseController
                 ->find();
 
             if (!$results) {
-                $error = 'No application was found for that email.';
+                $paymentAccessRecord = $this->applicationAccessModel
+                    ->where('email', $email)
+                    ->orderBy('paid_at', 'DESC')
+                    ->orderBy('created_at', 'DESC')
+                    ->first();
+
+                if ($paymentAccessRecord) {
+                    $paymentStatus = strtolower(trim((string) ($paymentAccessRecord['payment_status'] ?? '')));
+                    $accessStatus = strtolower(trim((string) ($paymentAccessRecord['access_status'] ?? '')));
+
+                    if ($paymentStatus === 'verified' && in_array($accessStatus, ['active', 'submitted'], true)) {
+                        $paymentNotice = $accessStatus === 'submitted'
+                            ? 'We found a confirmed payment for this email. If you already completed the form on another device or session, restore access below to reopen that paid application flow.'
+                            : 'We found a confirmed payment for this email, but the Japan application form has not been submitted yet. Restore access below to continue without paying again.';
+                    } elseif ($paymentStatus === 'pending') {
+                        $paymentNotice = 'We found a Japan application payment attempt for this email, but it is still pending confirmation. If you already paid, wait a moment and then try Restore Access below or contact support with your PayChangu reference.';
+                    } elseif ($paymentStatus === 'failed') {
+                        $paymentNotice = 'We found a Japan application payment attempt for this email, but it is marked as failed. If you were charged anyway, contact support with your PayChangu reference.';
+                    } else {
+                        $paymentNotice = 'We found a Japan application payment record for this email. If you already paid, use Restore Access below to continue.';
+                    }
+                } else {
+                    $error = 'No application was found for that email.';
+                }
             }
         }
 
@@ -272,6 +297,8 @@ class Japan extends BaseController
             'email' => $email,
             'results' => $results,
             'error' => $error,
+            'paymentAccessRecord' => $paymentAccessRecord,
+            'paymentNotice' => $paymentNotice,
             'applicationsOpen' => $this->isJapanApplicationsOpen(),
             'applicationsClosedMessage' => $this->getJapanApplicationsClosedMessage(),
         ]);
@@ -1023,7 +1050,12 @@ class Japan extends BaseController
 
         $webhookStatus = strtolower(trim((string) $webhookStatus));
         $webhookSuccess = $webhookStatus === 'success';
-        $apiSuccess = is_array($apiResult) && (($apiResult['status'] ?? '') === 'success');
+        $apiSuccess = $paychangu->isSuccessfulVerification(
+            $apiResult,
+            (string) ($record['tx_ref'] ?? ''),
+            (string) ($record['currency'] ?? 'MWK'),
+            isset($record['amount']) ? (float) $record['amount'] : null
+        );
         $fallbackSuccess = $this->isPayChanguTestMode() && $apiResult === null && !empty($record['tx_ref']) && $webhookStatus !== 'failed';
         $redirectSuccess = $trustRedirect && !empty($record['tx_ref']) && $webhookStatus !== 'failed';
 

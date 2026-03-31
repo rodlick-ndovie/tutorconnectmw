@@ -26,10 +26,10 @@ class Database extends Config
      */
     public array $default = [
         'DSN'          => '',
-        'hostname'     => env('database.default.hostname', 'localhost'),
-        'username'     => env('database.default.username', ''),
-        'password'     => env('database.default.password', ''),
-        'database'     => env('database.default.database', ''),
+        'hostname'     => 'localhost',
+        'username'     => '',
+        'password'     => '',
+        'database'     => '',
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
         'pConnect'     => false,
@@ -41,7 +41,7 @@ class Database extends Config
         'compress'     => false,
         'strictOn'     => false,
         'failover'     => [],
-        'port'         => (int) env('database.default.port', 3306),
+        'port'         => 3306,
         'numberNative' => false,
     ];
 
@@ -80,6 +80,12 @@ class Database extends Config
     public function __construct()
     {
         parent::__construct();
+
+        $this->default['hostname'] = env('database.default.hostname', $this->default['hostname']);
+        $this->default['username'] = env('database.default.username', $this->default['username']);
+        $this->default['password'] = env('database.default.password', $this->default['password']);
+        $this->default['database'] = env('database.default.database', $this->default['database']);
+        $this->default['port'] = (int) env('database.default.port', (string) $this->default['port']);
 
         // Ensure that we always set the database group to 'tests' if
         // we are currently running an automated test suite, so that

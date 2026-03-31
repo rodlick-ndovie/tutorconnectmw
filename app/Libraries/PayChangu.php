@@ -49,24 +49,66 @@ class PayChangu
      */
     public function verifyPayment($txRef)
     {
-        // First try the standard verification endpoint
-        $result = $this->makeRequest('GET', "/payment/verify/{$txRef}");
+        $txRef = trim((string) $txRef);
+        if ($txRef === '') {
+            return [
+                'status' => 'error',
+                'message' => 'Missing transaction reference.',
+            ];
+        }
 
-        // If that fails, try alternative endpoint formats
-        if (!$result || isset($result['status']) && $result['status'] === 'error') {
-            // Try alternative endpoint
-            $result = $this->makeRequest('GET', "/verify/{$txRef}");
+        $endpoints = [
+            "/verify-payment/{$txRef}",
+            "/payment/verify/{$txRef}",
+            "/verify/{$txRef}",
+        ];
 
-            // If still failing, try with different base URL variations
-            if (!$result || isset($result['status']) && $result['status'] === 'error') {
-                // For test environment, sometimes the API has connectivity issues
-                // Return null to indicate verification failed but don't treat as definitive failure
-                log_message('warning', 'PayChangu verification failed for tx_ref: ' . $txRef . ' - API may be unavailable');
-                return null;
+        foreach ($endpoints as $endpoint) {
+            $result = $this->makeRequest('GET', $endpoint);
+
+            if (is_array($result) && ($result['status'] ?? '') === 'success') {
+                return $result;
             }
         }
 
-        return $result;
+        // For test environments, DNS or API availability can be flaky. Returning null
+        // allows the caller to decide whether a non-destructive fallback is appropriate.
+        log_message('warning', 'PayChangu verification failed for tx_ref: ' . $txRef . ' - API may be unavailable');
+        return null;
+    }
+
+    /**
+     * Confirm that the verification response represents a completed payment.
+     */
+    public function isSuccessfulVerification(?array $result, string $expectedTxRef = '', string $expectedCurrency = '', ?float $expectedAmount = null): bool
+    {
+        if (!is_array($result) || strtolower(trim((string) ($result['status'] ?? ''))) !== 'success') {
+            return false;
+        }
+
+        $data = $result['data'] ?? null;
+        if (!is_array($data)) {
+            return false;
+        }
+
+        $paymentStatus = strtolower(trim((string) ($data['status'] ?? '')));
+        if (!in_array($paymentStatus, ['success', 'successful', 'completed', 'paid'], true)) {
+            return false;
+        }
+
+        if ($expectedTxRef !== '' && trim((string) ($data['tx_ref'] ?? '')) !== $expectedTxRef) {
+            return false;
+        }
+
+        if ($expectedCurrency !== '' && strtoupper(trim((string) ($data['currency'] ?? ''))) !== strtoupper($expectedCurrency)) {
+            return false;
+        }
+
+        if ($expectedAmount !== null && abs((float) ($data['amount'] ?? 0) - $expectedAmount) > 0.01) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

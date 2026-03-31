@@ -8,6 +8,8 @@ $results = $results ?? [];
 $reference = $reference ?? '';
 $email = $email ?? '';
 $error = $error ?? null;
+$paymentAccessRecord = $paymentAccessRecord ?? null;
+$paymentNotice = $paymentNotice ?? null;
 $applicationsOpen = isset($applicationsOpen) ? (bool) $applicationsOpen : in_array(strtolower(trim((string) site_setting('japan_applications_open', '1'))), ['1', 'true', 'yes', 'on'], true);
 $applicationsClosedMessage = trim((string) ($applicationsClosedMessage ?? site_setting('japan_applications_closed_message', '')));
 if ($applicationsClosedMessage === '') {
@@ -36,6 +38,22 @@ if ($applicationsClosedMessage === '') {
                 <?php if (!empty($error)): ?>
                     <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
                         <?= esc($error) ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($paymentNotice)): ?>
+                    <div class="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900">
+                        <div><?= esc($paymentNotice) ?></div>
+
+                        <?php if ($paymentAccessRecord && ($paymentAccessRecord['payment_status'] ?? '') === 'verified'): ?>
+                            <form method="post" action="<?= site_url('teach-in-japan/access/restore') ?>" class="mt-4">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="restore_email" value="<?= esc($paymentAccessRecord['email'] ?? $email) ?>">
+                                <button type="submit" class="inline-flex items-center rounded-xl bg-white px-4 py-2 font-bold text-primary border border-primary hover:bg-red-50 transition">
+                                    <i class="fas fa-unlock-alt mr-2"></i>Restore Access
+                                </button>
+                            </form>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 

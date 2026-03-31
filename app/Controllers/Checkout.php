@@ -574,7 +574,12 @@ class Checkout extends BaseController
 
             // Determine if payment is successful
             $webhookSuccess = $webhookStatus === 'success';
-            $apiSuccess = ($apiResult && isset($apiResult['status']) && $apiResult['status'] === 'success');
+            $apiSuccess = $paychangu->isSuccessfulVerification(
+                $apiResult,
+                (string) $txRef,
+                'MWK',
+                isset($subscription['payment_amount']) ? (float) $subscription['payment_amount'] : null
+            );
 
             // SPECIAL HANDLING: In test environment, if API fails but we have a valid tx_ref,
             // assume success since PayChangu processed the payment (trust the redirect flow)
