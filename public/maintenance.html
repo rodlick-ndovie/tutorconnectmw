@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>TutorConnect Malawi — Maintenance</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --primary:#E55C0D;
+      --primary-dark:#C94609;
+      --secondary:#2C3E50;
+      --accent:#34495E;
+      --neutral:#ECF0F1;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#475569;
+      --ring: rgba(229, 92, 13, .28);
+      --shadow: 0 20px 50px rgba(15, 23, 42, .12);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(900px 500px at 12% 10%, rgba(229, 92, 13, .18), transparent 55%),
+        radial-gradient(900px 600px at 85% 15%, rgba(52, 73, 94, .18), transparent 55%),
+        linear-gradient(180deg, var(--neutral), #ffffff);
+      display:flex;
+      align-items:stretch;
+    }
+
+    .wrap{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      min-height:100%;
+    }
+
+    .topbar{
+      height:10px;
+      background: linear-gradient(90deg, var(--secondary), var(--accent));
+    }
+
+    .main{
+      width:100%;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 44px 18px 24px;
+      display:flex;
+      flex:1;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .card{
+      width:100%;
+      background: var(--card);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      border: 1px solid rgba(15, 23, 42, .06);
+    }
+
+    .hero{
+      padding: 26px 24px;
+      background:
+        linear-gradient(135deg, rgba(229, 92, 13, .12), rgba(201, 70, 9, .08)),
+        linear-gradient(90deg, var(--neutral), #fff);
+      border-bottom: 1px solid rgba(15, 23, 42, .06);
+      display:flex;
+      gap: 14px;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      min-width: 260px;
+    }
+
+    .mark{
+      width:44px;
+      height:44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      display:grid;
+      place-items:center;
+      color:#fff;
+      flex: 0 0 auto;
+      box-shadow: 0 14px 30px rgba(229, 92, 13, .22);
+    }
+
+    .brand h1{
+      margin:0;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: .2px;
+      color: var(--secondary);
+      line-height: 1.15;
+    }
+    .brand p{
+      margin: 3px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(229, 92, 13, .22);
+      background: rgba(229, 92, 13, .06);
+      color: var(--secondary);
+      font-weight: 700;
+      font-size: 13px;
+      white-space:nowrap;
+    }
+    .dot{
+      width:10px;
+      height:10px;
+      border-radius:999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 6px rgba(229, 92, 13, .16);
+    }
+
+    .content{
+      padding: 26px 24px 22px;
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 22px;
+    }
+
+    @media (max-width: 860px){
+      .content{ grid-template-columns: 1fr; }
+    }
+
+    h2{
+      margin: 0 0 10px;
+      font-size: 30px;
+      letter-spacing: -0.4px;
+      line-height: 1.12;
+      color: var(--secondary);
+    }
+
+    .lead{
+      margin:0 0 16px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .btn{
+      appearance:none;
+      border:0;
+      cursor:pointer;
+      font-weight: 800;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 14px;
+      transition: transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 10px;
+      min-height: 44px;
+    }
+
+    .btn-primary{
+      color:#fff;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      box-shadow: 0 12px 28px rgba(229, 92, 13, .22);
+    }
+    .btn-primary:hover{ transform: translateY(-1px); }
+    .btn-primary:focus{ outline: none; box-shadow: 0 0 0 4px var(--ring), 0 12px 28px rgba(229, 92, 13, .22); }
+
+    .btn-outline{
+      color: var(--secondary);
+      background:#fff;
+      border: 1px solid rgba(44, 62, 80, .18);
+    }
+    .btn-outline:hover{ transform: translateY(-1px); border-color: rgba(229, 92, 13, .35); }
+    .btn-outline:focus{ outline: none; box-shadow: 0 0 0 4px var(--ring); border-color: rgba(229, 92, 13, .5); }
+
+    .panel{
+      border-radius: 14px;
+      border: 1px solid rgba(15, 23, 42, .08);
+      background: linear-gradient(180deg, rgba(236, 240, 241, .55), rgba(255,255,255, .92));
+      padding: 16px;
+    }
+    .panel h3{
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      color: var(--accent);
+    }
+    .kv{
+      display:grid;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .kv a{
+      color: var(--secondary);
+      text-decoration:none;
+      font-weight:700;
+    }
+    .kv a:hover{ color: var(--primary); }
+
+    .foot{
+      padding: 16px 18px 22px;
+      text-align:center;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .foot strong{ color: var(--secondary); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar" aria-hidden="true"></div>
+
+    <main class="main">
+      <section class="card" role="status" aria-live="polite">
+        <div class="hero">
+          <div class="brand">
+            <div class="mark" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 3L2.5 8l9.5 5 9.5-5L12 3Z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M6.5 10.5V16c0 1.2 2.4 3 5.5 3s5.5-1.8 5.5-3v-5.5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div>
+              <h1>TutorConnect Malawi</h1>
+              <p>Connecting students with verified teachers across Malawi.</p>
+            </div>
+          </div>
+
+          <div class="badge" title="Temporarily unavailable">
+            <span class="dot" aria-hidden="true"></span>
+            Maintenance in progress
+          </div>
+        </div>
+
+        <div class="content">
+          <div>
+            <h2>We’ll be back shortly.</h2>
+            <p class="lead">
+              We’re performing scheduled maintenance to improve performance and reliability.
+              Thank you for your patience.
+            </p>
+
+            <div class="actions">
+              <button class="btn btn-primary" type="button" onclick="location.reload()">
+                Try again
+              </button>
+              <a class="btn btn-outline" href="/" aria-label="Go to homepage (may be unavailable)">
+                Go to homepage
+              </a>
+            </div>
+          </div>
+
+          <aside class="panel">
+            <h3>Need help?</h3>
+            <div class="kv">
+              <div>
+                Email:
+                <a href="mailto:info@tutorconnectmw.com">info@tutorconnectmw.com</a>
+              </div>
+              <div>
+                Phone:
+                <a href="tel:+265992313978">+265 992 313 978</a>
+              </div>
+              <div>
+                Alternative:
+                <a href="tel:+265883790001">+265 883 790 001</a>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="foot">
+          © <strong>TutorConnect Malawi</strong>. All rights reserved.
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
