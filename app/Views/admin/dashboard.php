@@ -92,9 +92,12 @@
                         <div style="font-size: 22px; font-weight: 800; color: var(--text-dark); margin-top: 2px;">MK <?php echo number_format($stats['japan_application_fees_total'] ?? 0); ?></div>
                     </div>
                 </div>
-                <a href="<?php echo base_url('admin/japan-applications'); ?>" style="font-size: 12px; text-decoration: none; font-weight: 600;">Details</a>
+                <a href="<?php echo base_url('admin/japan-payments'); ?>" style="font-size: 12px; text-decoration: none; font-weight: 600;">Details</a>
             </div>
-            <div style="font-size: 12px; color: var(--text-light); margin-top: 8px;">Applications: <strong><?php echo number_format($stats['japan_applications_total'] ?? 0); ?></strong></div>
+            <div style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
+                Verified payments: <strong><?php echo number_format($stats['japan_verified_payments_total'] ?? 0); ?></strong>
+                | Submitted applications: <strong><?php echo number_format($stats['japan_applications_total'] ?? 0); ?></strong>
+            </div>
         </div>
 
         <div style="background: var(--bg-secondary); border: 1px solid rgba(0,0,0,0.06); border-radius: var(--border-radius-lg); padding: 14px;">

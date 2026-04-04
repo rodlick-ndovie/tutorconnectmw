@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Models\TutorModel;
 use App\Models\ContactMessageModel;
 use App\Models\JapanApplicationModel;
+use App\Models\JapanApplicationAccessModel;
 
 class Dashboard extends BaseController
 {
@@ -95,6 +96,7 @@ class Dashboard extends BaseController
         $contactMessageModel = new ContactMessageModel();
         $db = \Config\Database::connect();
         $japanApplicationModel = new JapanApplicationModel();
+        $japanApplicationAccessModel = new JapanApplicationAccessModel();
 
         // Basic user statistics
         $data['stats'] = [
@@ -176,19 +178,32 @@ class Dashboard extends BaseController
         // Japan application fee totals (Teach in Japan)
         try {
             $japanApplicationModel->ensureTable();
+            $japanApplicationAccessModel->ensureTable();
 
-            $row = $db->table('japan_teaching_applications')
-                ->select('COUNT(*) as total_applications, SUM(application_fee_amount) as total_application_fees')
+            $applicationsRow = $db->table('japan_teaching_applications')
+                ->select('COUNT(*) as total_applications')
                 ->get()
                 ->getRow();
 
-            $data['stats']['japan_applications_total'] = $row ? (int) ($row->total_applications ?? 0) : 0;
-            $data['stats']['japan_application_fees_total'] = $row && $row->total_application_fees !== null ? (int) $row->total_application_fees : 0;
+            $paymentsRow = $db->table('japan_application_access')
+                ->select('
+                    SUM(CASE WHEN payment_status = "verified" THEN amount ELSE 0 END) as verified_amount_total,
+                    SUM(CASE WHEN payment_status = "verified" THEN 1 ELSE 0 END) as verified_payments_total
+                ')
+                ->get()
+                ->getRow();
+
+            $data['stats']['japan_applications_total'] = $applicationsRow ? (int) ($applicationsRow->total_applications ?? 0) : 0;
+            $data['stats']['japan_verified_payments_total'] = $paymentsRow ? (int) ($paymentsRow->verified_payments_total ?? 0) : 0;
+            $data['stats']['japan_application_fees_total'] = $paymentsRow && $paymentsRow->verified_amount_total !== null
+                ? (int) $paymentsRow->verified_amount_total
+                : 0;
 
             // Add Japan application fees into total revenue for display
             $data['stats']['total_revenue'] += $data['stats']['japan_application_fees_total'];
         } catch (\Throwable $e) {
             $data['stats']['japan_applications_total'] = 0;
+            $data['stats']['japan_verified_payments_total'] = 0;
             $data['stats']['japan_application_fees_total'] = 0;
         }
 
