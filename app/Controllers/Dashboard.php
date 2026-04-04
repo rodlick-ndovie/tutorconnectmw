@@ -233,6 +233,40 @@ class Dashboard extends BaseController
             $data['stats']['japan_application_fees_total'] = 0;
         }
 
+        // Paid past paper income totals
+        try {
+            $pastPaperPaymentsRow = $db->table('past_paper_purchases')
+                ->select('
+                    SUM(CASE WHEN payment_status = "verified" THEN amount ELSE 0 END) as verified_amount_total,
+                    SUM(CASE WHEN payment_status = "verified" THEN 1 ELSE 0 END) as verified_purchases_total
+                ')
+                ->get()
+                ->getRow();
+
+            $paidPapersRow = $db->table('past_papers')
+                ->select('COUNT(*) as total_paid_papers')
+                ->where('is_paid', 1)
+                ->where('price >', 0)
+                ->get()
+                ->getRow();
+
+            $data['stats']['past_paper_income_total'] = $pastPaperPaymentsRow && $pastPaperPaymentsRow->verified_amount_total !== null
+                ? (int) $pastPaperPaymentsRow->verified_amount_total
+                : 0;
+            $data['stats']['past_paper_verified_purchases_total'] = $pastPaperPaymentsRow
+                ? (int) ($pastPaperPaymentsRow->verified_purchases_total ?? 0)
+                : 0;
+            $data['stats']['paid_past_papers_total'] = $paidPapersRow
+                ? (int) ($paidPapersRow->total_paid_papers ?? 0)
+                : 0;
+
+            $data['stats']['total_revenue'] += $data['stats']['past_paper_income_total'];
+        } catch (\Throwable $e) {
+            $data['stats']['past_paper_income_total'] = 0;
+            $data['stats']['past_paper_verified_purchases_total'] = 0;
+            $data['stats']['paid_past_papers_total'] = 0;
+        }
+
         // Recent users (last 5)
         $data['recent_users'] = $userModel->orderBy('created_at', 'DESC')->limit(5)->find();
 

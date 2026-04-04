@@ -12,8 +12,12 @@ class PayChangu
 
     public function __construct()
     {
-        $this->publicKey = getenv('PAYCHANGU_PUBLIC_KEY') ?: 'PUB-TEST-MB33j3iotOje4NXksN3UxQh8D9vZDYTk';
-        $this->secretKey = getenv('PAYCHANGU_SECRET_KEY') ?: 'SEC-TEST-boVHQZcRxP7rZRT84OxEdQ403nCx2R3J';
+        $this->publicKey = trim((string) getenv('PAYCHANGU_PUBLIC_KEY'));
+        $this->secretKey = trim((string) getenv('PAYCHANGU_SECRET_KEY'));
+
+        if ($this->publicKey === '' || $this->secretKey === '') {
+            log_message('error', 'PayChangu environment keys are missing. Check PAYCHANGU_PUBLIC_KEY and PAYCHANGU_SECRET_KEY.');
+        }
 
         // Use test/sandbox API for test keys, live API for production keys
         $isTestKey = stripos($this->publicKey, 'PUB-TEST-') === 0 || stripos($this->secretKey, 'SEC-TEST-') === 0;

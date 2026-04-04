@@ -155,6 +155,10 @@
 
                         <!-- Content -->
                         <div class="p-4">
+                            <?php
+                                $requiresPayment = !empty($paper['is_paid']);
+                                $hasPaidAccess = !empty($paper['has_paid_access']);
+                            ?>
                             <div class="flex items-center justify-between mb-3">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                     <i class="fas fa-book mr-1"></i>
@@ -179,6 +183,27 @@
                                 </span>
                             </div>
 
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <?php if ($requiresPayment): ?>
+                                    <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                        <i class="fas fa-lock mr-1"></i>
+                                        Paid • MK <?= number_format((float) ($paper['price'] ?? 0), 0) ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                                        <i class="fas fa-check-circle mr-1"></i>
+                                        Free Download
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php if ($requiresPayment && $hasPaidAccess): ?>
+                                    <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                                        <i class="fas fa-unlock mr-1"></i>
+                                        Access unlocked
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
                             <div class="text-sm text-gray-500 mb-3">
                                 <i class="fas fa-user mr-1"></i>
                                 <?php if (!empty($paper['first_name']) || !empty($paper['last_name'])): ?>
@@ -189,11 +214,22 @@
                             </div>
 
                             <!-- Download Button -->
-                            <button onclick="downloadPaper(<?= $paper['id'] ?>)"
-                               class="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center font-medium">
-                                <i class="fas fa-download mr-2"></i>
-                                Download PDF
-                            </button>
+                            <a href="<?= ($requiresPayment && !$hasPaidAccess)
+                                ? site_url('resources/past-papers/pay/' . $paper['id'])
+                                : site_url('resources/past-papers/download/' . $paper['id']) ?>"
+                               class="w-full <?= ($requiresPayment && !$hasPaidAccess) ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700' ?> text-white py-3 px-4 rounded-lg transition flex items-center justify-center font-medium">
+                                <i class="fas <?= ($requiresPayment && !$hasPaidAccess) ? 'fa-credit-card' : 'fa-download' ?> mr-2"></i>
+                                <?php if ($requiresPayment && !$hasPaidAccess): ?>
+                                    Pay MK <?= number_format((float) ($paper['price'] ?? 0), 0) ?> to Download
+                                <?php else: ?>
+                                    Download PDF
+                                <?php endif; ?>
+                            </a>
+                            <?php if ($requiresPayment && !$hasPaidAccess): ?>
+                                <p class="mt-3 text-xs text-amber-700">
+                                    Use the same email again later and we will restore access without charging twice.
+                                </p>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -248,18 +284,6 @@
 </style>
 
 <script>
-// Download paper without page navigation
-function downloadPaper(paperId) {
-    const url = '<?= site_url('resources/past-papers/download/') ?>' + paperId;
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = '';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
 // Auto-submit form on filter change (optional enhancement)
 document.addEventListener('DOMContentLoaded', function() {
     const filterSelects = document.querySelectorAll('select[name]');

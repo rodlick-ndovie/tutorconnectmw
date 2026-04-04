@@ -186,7 +186,14 @@ $routes->post('contact/send', 'Contact::send');
 $routes->group('resources', static function ($routes) {
     $routes->get('/', 'Resources::index');
     $routes->get('past-papers', 'Resources::pastPapers');
+    $routes->get('past-papers/pay/(:num)', 'Resources::pastPaperCheckout/$1');
     $routes->get('past-papers/download/(:num)', 'Resources::downloadPaper/$1');
+    $routes->post('past-papers/access/restore', 'Resources::restorePastPaperAccess');
+    $routes->post('past-papers/payment/initiate', 'Resources::initiatePastPaperPayment');
+    $routes->post('past-papers/payment/status', 'Resources::checkPastPaperPaymentStatus');
+    $routes->get('past-papers/payment/return', 'Resources::pastPaperPaymentReturn');
+    $routes->get('past-papers/payment/success', 'Resources::pastPaperPaymentSuccess');
+    $routes->match(['GET', 'POST'], 'past-papers/payment/callback', 'Resources::pastPaperPaymentCallback');
     $routes->get('video-solutions', 'Resources::videoSolutions');
     $routes->get('video/(:num)', 'Resources::viewVideo/$1');
     $routes->post('trackContactClick', 'Resources::trackContactClick');
@@ -274,6 +281,7 @@ $routes->group('admin', ['filter' => 'auth'], static function ($routes) {
     $routes->post('create-admin', 'Admin::createAdmin');
     $routes->post('create-trainer', 'Admin::createTrainer');
     $routes->get('trainers', 'Admin::trainers');
+    $routes->get('renewal-management', 'Admin::renewalManagement');
     $routes->get('services', 'Admin::services');
 
     $routes->get('settings', 'Admin::settings');
@@ -283,6 +291,7 @@ $routes->group('admin', ['filter' => 'auth'], static function ($routes) {
     $routes->get('contact-messages', 'Admin::contact_messages');
     $routes->get('japan-applications', 'Admin::japan_applications');
     $routes->get('japan-payments', 'Admin::japan_payments');
+    $routes->get('past-paper-payments', 'Admin::pastPaperPayments');
     $routes->get('japan-applications/export', 'Admin::exportJapanApplicationsExcel');
     $routes->get('japan-applications/export-pdf', 'Admin::exportJapanApplicationsPdf');
     $routes->get('japan-applications/(:num)/pdf', 'Admin::downloadJapanApplicationPdf/$1');

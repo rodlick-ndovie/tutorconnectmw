@@ -15,7 +15,7 @@ class PastPapersModel extends Model
     protected $allowedFields    = [
         'exam_body', 'exam_level', 'subject', 'year', 'paper_title',
         'paper_code', 'file_url', 'file_size', 'download_count',
-        'is_active', 'copyright_notice', 'uploaded_at'
+        'is_active', 'is_paid', 'price', 'copyright_notice', 'uploaded_at'
     ];
 
     protected bool $allowEmptyInserts = false;

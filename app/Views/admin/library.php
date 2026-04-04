@@ -110,6 +110,17 @@
                                     <?php if ($resource['is_featured']): ?>
                                         <span class="badge bg-warning ms-1">Featured</span>
                                     <?php endif; ?>
+                                    <?php if ($resource['resource_type'] === 'past_paper'): ?>
+                                        <div class="mt-1">
+                                            <?php if (!empty($resource['is_paid'])): ?>
+                                                <span class="badge bg-warning text-dark">
+                                                    Paid • MK <?= number_format((float) ($resource['price'] ?? 0), 0) ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-success">Free Download</span>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
                                 <td><?= esc($resource['subject']) ?></td>
                                 <td><?= esc($resource['curriculum']) ?></td>
@@ -258,6 +269,24 @@
                     <div class="form-group">
                         <label>Paper Code</label>
                         <input type="text" name="paper_code" class="form-control" placeholder="e.g., 4024/1">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group" style="padding-top: 32px;">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="is_paid_add" name="is_paid" value="1">
+                                    <label class="form-check-label" for="is_paid_add">Paid download</label>
+                                </div>
+                                <small class="form-text text-muted">Students must pay before downloading this paper.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label>Download Price (MWK)</label>
+                                <input type="number" name="price" id="price_add" class="form-control" min="0" step="0.01" placeholder="e.g., 1500" disabled>
+                                <small class="form-text text-muted">Set the amount only when paid download is enabled.</small>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>PDF File <span class="text-danger">*</span></label>
@@ -440,6 +469,24 @@
                     <div class="form-group">
                         <label>Paper Code</label>
                         <input type="text" name="paper_code" id="edit_paper_code" class="form-control">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group" style="padding-top: 32px;">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="edit_is_paid" name="is_paid" value="1">
+                                    <label class="form-check-label" for="edit_is_paid">Paid download</label>
+                                </div>
+                                <small class="form-text text-muted">Require payment before students can download this paper.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label>Download Price (MWK)</label>
+                                <input type="number" name="price" id="edit_price" class="form-control" min="0" step="0.01" placeholder="e.g., 1500" disabled>
+                                <small class="form-text text-muted">Use `0` only for free downloads.</small>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Replace PDF File (Optional)</label>
@@ -631,6 +678,33 @@ document.getElementById('paper_exam_body').addEventListener('change', function()
         levelSelect.disabled = true;
     });
 });
+
+function updatePaperPricingState(checkboxId, inputId) {
+    const checkbox = document.getElementById(checkboxId);
+    const input = document.getElementById(inputId);
+
+    if (!checkbox || !input) {
+        return;
+    }
+
+    input.disabled = !checkbox.checked;
+    input.required = checkbox.checked;
+
+    if (!checkbox.checked) {
+        input.value = '';
+    }
+}
+
+document.getElementById('is_paid_add').addEventListener('change', function() {
+    updatePaperPricingState('is_paid_add', 'price_add');
+});
+
+document.getElementById('edit_is_paid').addEventListener('change', function() {
+    updatePaperPricingState('edit_is_paid', 'edit_price');
+});
+
+updatePaperPricingState('is_paid_add', 'price_add');
+updatePaperPricingState('edit_is_paid', 'edit_price');
 
 // Add Paper Form - Level change
 document.getElementById('paper_exam_level').addEventListener('change', function() {
@@ -913,11 +987,14 @@ function editPaper(id) {
     document.getElementById('edit_paper_code').value = '';
     document.getElementById('edit_copyright_notice').value = '';
     document.getElementById('is_active_edit').checked = false;
+    document.getElementById('edit_is_paid').checked = false;
+    document.getElementById('edit_price').value = '';
     document.getElementById('edit_exam_body').value = '';
     document.getElementById('edit_exam_level').innerHTML = '<option value="">Loading...</option>';
     document.getElementById('edit_exam_level').disabled = true;
     document.getElementById('edit_subject').innerHTML = '<option value="">Loading...</option>';
     document.getElementById('edit_subject').disabled = true;
+    updatePaperPricingState('edit_is_paid', 'edit_price');
 
     // Fetch resource data
     fetch('<?= site_url('admin/library/get/') ?>' + id + '/past_paper', {
@@ -939,7 +1016,10 @@ function editPaper(id) {
             document.getElementById('edit_paper_code').value = resource.paper_code || '';
             document.getElementById('edit_copyright_notice').value = resource.copyright_notice || '';
             document.getElementById('is_active_edit').checked = resource.is_active == 1;
+            document.getElementById('edit_is_paid').checked = resource.is_paid == 1;
+            document.getElementById('edit_price').value = resource.price || '';
             document.getElementById('edit_exam_body').value = resource.exam_body;
+            updatePaperPricingState('edit_is_paid', 'edit_price');
 
             // Fetch levels
             const curriculum = resource.exam_body;

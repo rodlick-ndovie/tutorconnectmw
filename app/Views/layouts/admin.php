@@ -287,6 +287,10 @@
                     <span class="nav-icon"><i class="fas fa-chalkboard-teacher"></i></span>
                     Tutors
                 </a>
+                <a href="<?php echo base_url('admin/renewal-management'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'renewal_management') ? 'active' : ''; ?>">
+                    <span class="nav-icon"><i class="fas fa-bell"></i></span>
+                    Renewal Management
+                </a>
                 <a href="<?php echo base_url('admin/curriculum'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'curriculum') ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-graduation-cap"></i></span>
                     Curriculum
@@ -317,6 +321,10 @@
                 <a href="<?php echo base_url('admin/tutor-subscriptions'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'tutor_subscriptions') ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-users-cog"></i></span>
                     Tutor Subscriptions
+                </a>
+                <a href="<?php echo base_url('admin/past-paper-payments'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'past_paper_payments') ? 'active' : ''; ?>">
+                    <span class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></span>
+                    PDF Download Payments
                 </a>
 
 

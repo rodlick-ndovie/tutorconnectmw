@@ -1868,6 +1868,192 @@ info@tutorconnectmw.com | +265 992 313 978";
         return view('admin/tutor_subscriptions', $data);
     }
 
+    public function renewalManagement()
+    {
+        $this->requireAdminAccess();
+
+        $data = [
+            'title' => 'Renewal Management - TutorConnect Malawi',
+        ];
+
+        $data = $this->getAdminData($data);
+
+        $db = Database::connect();
+        $nowTs = time();
+        $now = date('Y-m-d H:i:s', $nowTs);
+        $scanUntil = date('Y-m-d H:i:s', $nowTs + (5 * 24 * 60 * 60));
+        $reminderTypeLabels = [
+            '5_days' => '5 days',
+            '2_days' => '2 days',
+            '6_hours' => '6 hours',
+        ];
+
+        $this->tutorSubscriptionModel->markExpiredSubscriptions();
+
+        $subscriptions = $db->table('tutor_subscriptions ts')
+            ->select('
+                ts.id,
+                ts.user_id,
+                ts.plan_id,
+                ts.status,
+                ts.payment_status,
+                ts.current_period_start,
+                ts.current_period_end,
+                ts.created_at,
+                ts.updated_at,
+                u.first_name,
+                u.last_name,
+                u.username,
+                u.email,
+                u.phone,
+                sp.name as plan_name,
+                sp.price_monthly
+            ')
+            ->join('users u', 'u.id = ts.user_id')
+            ->join('subscription_plans sp', 'sp.id = ts.plan_id', 'left')
+            ->where('u.role', 'trainer')
+            ->groupStart()
+                ->where('ts.status', 'expired')
+                ->orGroupStart()
+                    ->where('ts.status', 'active')
+                    ->where('ts.current_period_start <=', $now)
+                    ->where('ts.current_period_end >=', $now)
+                    ->where('ts.current_period_end <=', $scanUntil)
+                ->groupEnd()
+            ->groupEnd()
+            ->orderBy('ts.current_period_end', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        $reminderTableExists = $db->tableExists('subscription_renewal_reminders');
+        $reminderSummaryMap = [];
+        $reminderHistory = [];
+
+        if ($reminderTableExists) {
+            $reminderRows = $db->table('subscription_renewal_reminders rr')
+                ->select('
+                    rr.id,
+                    rr.subscription_id,
+                    rr.user_id,
+                    rr.reminder_type,
+                    rr.target_period_end,
+                    rr.recipient_email,
+                    rr.status,
+                    rr.error_message,
+                    rr.sent_at,
+                    rr.created_at,
+                    rr.updated_at,
+                    ts.current_period_end,
+                    ts.status as subscription_status,
+                    sp.name as plan_name,
+                    u.first_name,
+                    u.last_name,
+                    u.username,
+                    u.email
+                ')
+                ->join('tutor_subscriptions ts', 'ts.id = rr.subscription_id', 'left')
+                ->join('users u', 'u.id = rr.user_id', 'left')
+                ->join('subscription_plans sp', 'sp.id = ts.plan_id', 'left')
+                ->orderBy('COALESCE(rr.sent_at, rr.created_at)', 'DESC', false)
+                ->get()
+                ->getResultArray();
+
+            foreach ($reminderRows as $row) {
+                $key = ((int) ($row['subscription_id'] ?? 0)) . '|' . (string) ($row['target_period_end'] ?? '');
+                $label = $reminderTypeLabels[$row['reminder_type'] ?? ''] ?? strtoupper((string) ($row['reminder_type'] ?? ''));
+
+                if (!isset($reminderSummaryMap[$key])) {
+                    $reminderSummaryMap[$key] = [
+                        'sent_labels' => [],
+                        'failed_labels' => [],
+                        'skipped_labels' => [],
+                        'last_sent_at' => null,
+                        'last_status' => null,
+                    ];
+                }
+
+                if (($row['status'] ?? '') === 'sent') {
+                    $reminderSummaryMap[$key]['sent_labels'][] = $label;
+
+                    if (!empty($row['sent_at'])) {
+                        $lastSentAt = strtotime((string) $row['sent_at']);
+                        $currentLast = $reminderSummaryMap[$key]['last_sent_at'] ? strtotime((string) $reminderSummaryMap[$key]['last_sent_at']) : null;
+                        if ($currentLast === null || ($lastSentAt !== false && $lastSentAt > $currentLast)) {
+                            $reminderSummaryMap[$key]['last_sent_at'] = $row['sent_at'];
+                        }
+                    }
+                } elseif (($row['status'] ?? '') === 'failed') {
+                    $reminderSummaryMap[$key]['failed_labels'][] = $label;
+                } elseif (($row['status'] ?? '') === 'skipped') {
+                    $reminderSummaryMap[$key]['skipped_labels'][] = $label;
+                }
+
+                $reminderSummaryMap[$key]['last_status'] = $row['status'] ?? null;
+
+                $reminderHistory[] = [
+                    'id' => (int) ($row['id'] ?? 0),
+                    'subscription_id' => (int) ($row['subscription_id'] ?? 0),
+                    'trainer_name' => trim((($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''))) ?: ($row['username'] ?? 'Unknown'),
+                    'email' => $row['recipient_email'] ?: ($row['email'] ?? ''),
+                    'plan_name' => $row['plan_name'] ?? 'Plan',
+                    'reminder_type' => $label,
+                    'status' => $row['status'] ?? 'sent',
+                    'sent_at' => $row['sent_at'] ?? null,
+                    'target_period_end' => $row['target_period_end'] ?? null,
+                    'error_message' => $row['error_message'] ?? null,
+                ];
+            }
+        }
+
+        foreach ($subscriptions as &$subscription) {
+            $subscription['trainer_name'] = trim((($subscription['first_name'] ?? '') . ' ' . ($subscription['last_name'] ?? ''))) ?: ($subscription['username'] ?? 'Unknown');
+            $subscription['plan_name'] = $subscription['plan_name'] ?? 'Plan';
+
+            $expiryTs = !empty($subscription['current_period_end']) ? strtotime((string) $subscription['current_period_end']) : false;
+            $subscription['renewal_bucket'] = ($subscription['status'] ?? '') === 'expired' || ($expiryTs !== false && $expiryTs < $nowTs)
+                ? 'expired'
+                : 'due_soon';
+
+            if ($expiryTs === false) {
+                $subscription['time_remaining_label'] = 'Unknown';
+            } elseif ($subscription['renewal_bucket'] === 'expired') {
+                $secondsPast = max(0, $nowTs - $expiryTs);
+                $subscription['time_remaining_label'] = $this->formatRenewalInterval($secondsPast, true);
+            } else {
+                $secondsLeft = max(0, $expiryTs - $nowTs);
+                $subscription['time_remaining_label'] = $this->formatRenewalInterval($secondsLeft, false);
+            }
+
+            $summaryKey = ((int) ($subscription['id'] ?? 0)) . '|' . (string) ($subscription['current_period_end'] ?? '');
+            $summary = $reminderSummaryMap[$summaryKey] ?? [
+                'sent_labels' => [],
+                'failed_labels' => [],
+                'skipped_labels' => [],
+                'last_sent_at' => null,
+                'last_status' => null,
+            ];
+
+            $subscription['sent_reminders'] = array_values(array_unique($summary['sent_labels']));
+            $subscription['failed_reminders'] = array_values(array_unique($summary['failed_labels']));
+            $subscription['skipped_reminders'] = array_values(array_unique($summary['skipped_labels']));
+            $subscription['last_alert_sent_at'] = $summary['last_sent_at'];
+            $subscription['last_alert_status'] = $summary['last_status'];
+        }
+        unset($subscription);
+
+        $data['renewal_subscriptions'] = $subscriptions;
+        $data['reminder_history'] = array_slice($reminderHistory, 0, 100);
+        $data['reminder_table_exists'] = $reminderTableExists;
+        $data['stats'] = [
+            'expired_count' => count(array_filter($subscriptions, static fn($row) => ($row['renewal_bucket'] ?? '') === 'expired')),
+            'due_soon_count' => count(array_filter($subscriptions, static fn($row) => ($row['renewal_bucket'] ?? '') === 'due_soon')),
+            'alerts_sent_count' => count(array_filter($reminderHistory, static fn($row) => ($row['status'] ?? '') === 'sent')),
+            'alerts_failed_count' => count(array_filter($reminderHistory, static fn($row) => ($row['status'] ?? '') === 'failed')),
+        ];
+
+        return view('admin/renewal_management', $data);
+    }
+
     // Assign subscription to tutor
     public function assignSubscription()
     {
@@ -3161,6 +3347,69 @@ info@uprisemw.com | +265 992 313 978";
         return view('admin/japan_payments', $data);
     }
 
+    public function pastPaperPayments()
+    {
+        $this->requireAdminAccess();
+
+        $status = trim((string) $this->request->getGet('payment_status'));
+        $search = trim((string) $this->request->getGet('q'));
+
+        $purchaseModel = new \App\Models\PastPaperPurchaseModel();
+
+        $builder = $purchaseModel
+            ->select('past_paper_purchases.*, past_papers.paper_title, past_papers.paper_code, past_papers.subject, past_papers.exam_body, past_papers.exam_level, past_papers.year')
+            ->join('past_papers', 'past_papers.id = past_paper_purchases.past_paper_id', 'left')
+            ->orderBy('past_paper_purchases.paid_at', 'DESC')
+            ->orderBy('past_paper_purchases.created_at', 'DESC');
+
+        if ($status !== '') {
+            $builder = $builder->where('past_paper_purchases.payment_status', $status);
+        }
+
+        if ($search !== '') {
+            $builder = $builder->groupStart()
+                ->like('past_paper_purchases.tx_ref', $search)
+                ->orLike('past_paper_purchases.buyer_name', $search)
+                ->orLike('past_paper_purchases.buyer_email', $search)
+                ->orLike('past_papers.paper_title', $search)
+                ->orLike('past_papers.paper_code', $search)
+                ->orLike('past_papers.subject', $search)
+                ->groupEnd();
+        }
+
+        $db = Database::connect();
+
+        $totalsRow = $db->table('past_paper_purchases')
+            ->select('COUNT(*) as total_count,
+                      SUM(CASE WHEN payment_status = "verified" THEN amount ELSE 0 END) as verified_amount_total,
+                      SUM(CASE WHEN payment_status = "verified" THEN 1 ELSE 0 END) as verified_count,
+                      SUM(CASE WHEN payment_status = "pending" THEN 1 ELSE 0 END) as pending_count,
+                      SUM(CASE WHEN payment_status = "failed" THEN 1 ELSE 0 END) as failed_count,
+                      SUM(CASE WHEN payment_status = "verified" THEN download_count ELSE 0 END) as total_verified_downloads')
+            ->get()
+            ->getRow();
+
+        $data = [
+            'title' => 'PDF Download Payments - TutorConnect Malawi',
+            'payments' => $builder->paginate(25),
+            'pager' => $purchaseModel->pager,
+            'paymentStatusFilter' => $status,
+            'searchQuery' => $search,
+            'totals' => [
+                'total_count' => (int) ($totalsRow->total_count ?? 0),
+                'verified_amount_total' => (int) ($totalsRow->verified_amount_total ?? 0),
+                'verified_count' => (int) ($totalsRow->verified_count ?? 0),
+                'pending_count' => (int) ($totalsRow->pending_count ?? 0),
+                'failed_count' => (int) ($totalsRow->failed_count ?? 0),
+                'total_verified_downloads' => (int) ($totalsRow->total_verified_downloads ?? 0),
+            ],
+        ];
+
+        $data = $this->getAdminData($data);
+
+        return view('admin/past_paper_payments', $data);
+    }
+
     public function exportJapanApplicationsExcel()
     {
         $this->requireAdminAccess();
@@ -3513,6 +3762,8 @@ info@uprisemw.com | +265 992 313 978";
                 'curriculum' => $paper['exam_body'],
                 'grade_level' => $paper['exam_level'],
                 'is_approved' => $paper['is_active'],
+                'is_paid' => (int) ($paper['is_paid'] ?? 0),
+                'price' => (float) ($paper['price'] ?? 0),
                 'is_featured' => false,
                 'view_count' => 0,
                 'download_count' => $paper['download_count'] ?? 0,
@@ -3671,6 +3922,22 @@ info@uprisemw.com | +265 992 313 978";
                     return redirect()->back()->withInput()->with('error', 'Validation failed')->with('errors', $validation->getErrors());
                 }
 
+                $isPaid = $this->request->getPost('is_paid') ? 1 : 0;
+                $price = $this->normalizeMoneyAmount($this->request->getPost('price'));
+
+                if ($isPaid && $price <= 0) {
+                    $message = 'Set a valid amount for paid past papers.';
+                    if ($isAjax) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => $message,
+                            'errors' => ['price' => $message]
+                        ]);
+                    }
+
+                    return redirect()->back()->withInput()->with('error', $message);
+                }
+
                 $file = $this->request->getFile('file');
                 $filePath = '';
                 $fileSize = '';
@@ -3708,6 +3975,8 @@ info@uprisemw.com | +265 992 313 978";
                     'file_url' => $filePath,
                     'file_size' => $fileSize,
                     'is_active' => $this->request->getPost('is_active') ? 1 : 0,
+                    'is_paid' => $isPaid,
+                    'price' => $isPaid ? $price : 0,
                     'copyright_notice' => $this->request->getPost('copyright_notice')
                 ];
 
@@ -4164,7 +4433,7 @@ info@uprisemw.com | +265 992 313 978";
     {
         $this->requireAdminAccess();
 
-        if ($this->request->getMethod() !== 'post') {
+        if (strtolower((string) $this->request->getMethod()) !== 'post') {
             return redirect()->to(base_url('admin/library'));
         }
 
@@ -4176,6 +4445,12 @@ info@uprisemw.com | +265 992 313 978";
         try {
             $id = $this->request->getPost('id');
             $resourceType = $this->request->getPost('resource_type') ?? ($this->request->getPost('status') !== null ? 'video' : 'past_paper');
+
+            log_message('info', 'Admin update_resource request', [
+                'id' => $id,
+                'resource_type' => $resourceType,
+                'is_ajax' => $isAjax,
+            ]);
 
             if (empty($id)) {
                 $message = 'Missing resource identifier.';
@@ -4206,6 +4481,20 @@ info@uprisemw.com | +265 992 313 978";
 
     private function updatePaper($id, bool $isAjax)
     {
+        $existingPaper = $this->pastPapersModel->find($id);
+
+        if (!$existingPaper) {
+            $message = 'Past paper not found.';
+            if ($isAjax) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $message
+                ]);
+            }
+
+            return redirect()->back()->with('error', $message);
+        }
+
         $validation = \Config\Services::validation();
 
         $rules = [
@@ -4235,6 +4524,22 @@ info@uprisemw.com | +265 992 313 978";
             return redirect()->back()->with('error', 'Validation failed')->with('errors', $validation->getErrors());
         }
 
+        $isPaid = $this->request->getPost('is_paid') ? 1 : 0;
+        $price = $this->normalizeMoneyAmount($this->request->getPost('price'));
+
+        if ($isPaid && $price <= 0) {
+            $message = 'Set a valid amount for paid past papers.';
+            if ($isAjax) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $message,
+                    'errors' => ['price' => $message]
+                ]);
+            }
+
+            return redirect()->back()->with('error', $message)->withInput();
+        }
+
         $paperData = [
             'exam_body' => $this->request->getPost('exam_body'),
             'exam_level' => $this->request->getPost('exam_level'),
@@ -4243,15 +4548,30 @@ info@uprisemw.com | +265 992 313 978";
             'paper_title' => $this->request->getPost('paper_title'),
             'paper_code' => $this->request->getPost('paper_code'),
             'is_active' => $this->request->getPost('is_active') ? 1 : 0,
+            'is_paid' => $isPaid,
+            'price' => $isPaid ? $price : 0,
             'copyright_notice' => $this->request->getPost('copyright_notice')
         ];
 
+        $hasFileChange = $file && $file->isValid() && !$file->hasMoved();
+        $hasDataChange = $this->paperDataHasChanges($existingPaper, $paperData);
+
+        if (!$hasFileChange && !$hasDataChange) {
+            if ($isAjax) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'No changes were needed. The past paper is already up to date.'
+                ]);
+            }
+
+            return redirect()->to(base_url('admin/library'))->with('success', 'No changes were needed. The past paper is already up to date.');
+        }
+
         // Handle file upload if new file provided
-        if ($file && $file->isValid() && !$file->hasMoved()) {
+        if ($hasFileChange) {
             // Delete old file
-            $oldResource = $this->pastPapersModel->find($id);
-            if ($oldResource && $oldResource['file_url']) {
-                $oldFileName = basename(parse_url($oldResource['file_url'], PHP_URL_PATH));
+            if ($existingPaper['file_url']) {
+                $oldFileName = basename(parse_url($existingPaper['file_url'], PHP_URL_PATH));
                 $oldFilePath = WRITEPATH . 'uploads/past_papers/' . $oldFileName;
                 if (file_exists($oldFilePath)) {
                     unlink($oldFilePath);
@@ -4684,6 +5004,59 @@ info@uprisemw.com | +265 992 313 978";
             'success' => false,
             'message' => 'Failed to delete backup file'
         ]);
+    }
+
+    private function normalizeMoneyAmount($amount): float
+    {
+        if (is_string($amount)) {
+            $amount = preg_replace('/[^0-9.]/', '', $amount);
+        }
+
+        return round((float) $amount, 2);
+    }
+
+    private function formatRenewalInterval(int $seconds, bool $isPast): string
+    {
+        if ($seconds <= 0) {
+            return $isPast ? 'Expired just now' : 'Due now';
+        }
+
+        $units = [
+            ['day', 86400],
+            ['hour', 3600],
+            ['minute', 60],
+        ];
+
+        foreach ($units as [$label, $unitSeconds]) {
+            if ($seconds >= $unitSeconds || $unitSeconds === 60) {
+                $value = $isPast
+                    ? (int) floor($seconds / $unitSeconds)
+                    : (int) ceil($seconds / $unitSeconds);
+
+                $value = max(1, $value);
+                $suffix = $value === 1 ? $label : $label . 's';
+
+                return $isPast
+                    ? 'Expired ' . $value . ' ' . $suffix . ' ago'
+                    : 'Due in ' . $value . ' ' . $suffix;
+            }
+        }
+
+        return $isPast ? 'Expired recently' : 'Due soon';
+    }
+
+    private function paperDataHasChanges(array $existingPaper, array $paperData): bool
+    {
+        return trim((string) ($existingPaper['exam_body'] ?? '')) !== trim((string) ($paperData['exam_body'] ?? ''))
+            || trim((string) ($existingPaper['exam_level'] ?? '')) !== trim((string) ($paperData['exam_level'] ?? ''))
+            || trim((string) ($existingPaper['subject'] ?? '')) !== trim((string) ($paperData['subject'] ?? ''))
+            || (int) ($existingPaper['year'] ?? 0) !== (int) ($paperData['year'] ?? 0)
+            || trim((string) ($existingPaper['paper_title'] ?? '')) !== trim((string) ($paperData['paper_title'] ?? ''))
+            || trim((string) ($existingPaper['paper_code'] ?? '')) !== trim((string) ($paperData['paper_code'] ?? ''))
+            || (int) ($existingPaper['is_active'] ?? 0) !== (int) ($paperData['is_active'] ?? 0)
+            || (int) ($existingPaper['is_paid'] ?? 0) !== (int) ($paperData['is_paid'] ?? 0)
+            || $this->normalizeMoneyAmount($existingPaper['price'] ?? 0) !== $this->normalizeMoneyAmount($paperData['price'] ?? 0)
+            || trim((string) ($existingPaper['copyright_notice'] ?? '')) !== trim((string) ($paperData['copyright_notice'] ?? ''));
     }
 
     private function formatBytes($bytes, $precision = 2)

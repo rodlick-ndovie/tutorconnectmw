@@ -486,7 +486,7 @@ $recommendedChecklist = [
     <div id="offcanvasBackdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 md:hidden transition-opacity duration-300" onclick="toggleOffcanvas()"></div>
 
     <div id="offcanvasMenu" class="fixed inset-0 bg-white transform -translate-x-full transition-transform duration-300 z-50 md:hidden overflow-y-auto">
-        <div class="bg-gradient-to-r from-secondary to-accent text-white p-6 flex items-center justify-between sticky top-0">
+        <div class="bg-white text-secondary p-6 flex items-center justify-between sticky top-0 border-b border-slate-200 shadow-sm">
             <div class="flex items-center">
                 <?php if (!empty($siteLogo)): ?>
                     <img src="<?= esc(base_url('uploads/' . $siteLogo)) ?>" alt="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?>" class="h-14 w-auto" />
@@ -495,7 +495,7 @@ $recommendedChecklist = [
                     <span class="ml-2 text-lg font-bold"><?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?></span>
                 <?php endif; ?>
             </div>
-            <button onclick="toggleOffcanvas()" class="text-white hover:bg-white/20 p-2 rounded-lg transition">
+            <button onclick="toggleOffcanvas()" class="text-secondary hover:bg-slate-100 p-2 rounded-lg transition">
                 <i class="fas fa-times text-2xl"></i>
             </button>
         </div>

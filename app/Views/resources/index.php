@@ -22,21 +22,23 @@
 
     <!-- Resource Type Tabs -->
     <div class="mb-8 flex justify-center px-4 sm:px-6 lg:px-8">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-1 flex">
+        <div class="w-full max-w-4xl rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-center">
             <a href="<?= site_url('resources?type=all') ?>"
-               class="px-6 py-3 rounded-md font-medium transition <?= $resource_type === 'all' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100' ?>">
+               class="inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold transition <?= $resource_type === 'all' ? 'bg-primary text-white shadow-md shadow-primary/20' : 'text-gray-700 hover:bg-gray-100' ?>">
                 <i class="fas fa-th-large mr-2"></i>All Resources
             </a>
                 <a href="<?= site_url('resources?type=papers') ?>"
-                   class="px-6 py-3 rounded-md font-medium transition <?= $resource_type === 'papers' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100' ?>">
+                   class="inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold transition <?= $resource_type === 'papers' ? 'bg-primary text-white shadow-md shadow-primary/20' : 'text-gray-700 hover:bg-gray-100' ?>">
                     <i class="fas fa-file-pdf mr-2"></i>Past Papers
                 </a>
                 <a href="<?= site_url('resources?type=videos') ?>"
-                   class="px-6 py-3 rounded-md font-medium transition <?= $resource_type === 'videos' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100' ?>">
+                   class="inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold transition <?= $resource_type === 'videos' ? 'bg-primary text-white shadow-md shadow-primary/20' : 'text-gray-700 hover:bg-gray-100' ?>">
                     <i class="fas fa-video mr-2"></i>Video Solutions
                 </a>
             </div>
         </div>
+    </div>
 
     <!-- Advanced Filters -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -141,19 +143,14 @@
             <!-- Past Papers Section -->
             <?php if ($showPapers): ?>
                 <div class="mb-12">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-2xl font-bold text-gray-900 flex items-center">
+                    <div class="mb-6 flex items-center justify-between gap-4">
+                        <h2 class="flex items-center text-2xl font-bold text-gray-900">
                             <i class="fas fa-file-pdf mr-3 text-primary"></i>
                             Past Papers
-                            <span class="ml-2 bg-red-100 text-red-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                            <span class="ml-3 rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
                                 <?= count($papers) ?> available
                             </span>
                         </h2>
-                        <?php if ($resource_type === 'all'): ?>
-                            <a href="<?= site_url('resources?type=papers') ?>" class="text-primary hover:text-red-700 font-medium">
-                                View all papers <i class="fas fa-arrow-right ml-1"></i>
-                            </a>
-                        <?php endif; ?>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -161,51 +158,80 @@
                         $displayPapers = $resource_type === 'all' ? array_slice($papers, 0, 6) : $papers;
                         foreach ($displayPapers as $paper):
                         ?>
-                            <div class="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
-                                <!-- Header -->
-                                <div class="bg-gradient-to-r from-primary to-red-600 text-white p-4">
+                            <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+                                <div class="border-b border-red-100 bg-gradient-to-br from-white via-red-50 to-red-100 p-5">
                                     <div class="flex items-center justify-between">
                                         <div>
-                                            <h3 class="font-bold text-lg line-clamp-2"><?= esc($paper['paper_title']) ?></h3>
-                                            <p class="text-red-100 text-sm">
+                                            <h3 class="line-clamp-2 text-lg font-bold text-gray-900"><?= esc($paper['paper_title']) ?></h3>
+                                            <p class="mt-1 text-sm text-gray-600">
                                                 <?= esc($paper['exam_body']) ?> • <?= esc($paper['exam_level']) ?>
                                             </p>
                                         </div>
-                                        <div class="text-right">
-                                            <div class="text-2xl font-bold"><?= esc($paper['year']) ?></div>
-                                            <div class="text-xs text-red-100">Year</div>
+                                        <div class="rounded-2xl bg-white px-4 py-3 text-right shadow-sm ring-1 ring-red-100">
+                                            <div class="text-2xl font-bold text-primary"><?= esc($paper['year']) ?></div>
+                                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Year</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Content -->
-                                <div class="p-4">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <div class="p-5">
+                                    <?php
+                                    $requiresPayment = !empty($paper['is_paid']);
+                                    $hasPaidAccess = !empty($paper['has_paid_access']);
+                                    ?>
+                                    <div class="mb-4 flex flex-wrap items-center gap-2">
+                                        <span class="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
                                             <i class="fas fa-book mr-1"></i>
                                             <?= esc($paper['subject']) ?>
                                         </span>
                                         <?php if (!empty($paper['paper_code'])): ?>
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                            <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
                                                 <i class="fas fa-hashtag mr-1"></i>
                                                 <?= esc($paper['paper_code']) ?>
                                             </span>
                                         <?php endif; ?>
                                     </div>
 
-                                    <div class="flex items-center justify-between text-sm text-gray-600 mb-3">
-                                        <span>
-                                            <i class="fas fa-file mr-1"></i>
-                                            <?= esc($paper['file_size'] ?? 'Unknown size') ?>
-                                        </span>
-                                        <span>
-                                            <i class="fas fa-download mr-1"></i>
-                                            <?= number_format($paper['download_count'] ?? 0) ?> downloads
-                                        </span>
+                                    <div class="mb-4 grid grid-cols-2 gap-3 rounded-2xl bg-gray-50 p-3 text-sm text-gray-600">
+                                        <div>
+                                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">File Size</div>
+                                            <div class="mt-1 font-medium text-gray-800">
+                                                <i class="fas fa-file mr-1 text-primary"></i>
+                                                <?= esc($paper['file_size'] ?? 'Unknown size') ?>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Downloads</div>
+                                            <div class="mt-1 font-medium text-gray-800">
+                                                <i class="fas fa-download mr-1 text-primary"></i>
+                                                <?= number_format($paper['download_count'] ?? 0) ?>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div class="text-sm text-gray-500 mb-3">
-                                        <i class="fas fa-user mr-1"></i>
+                                    <div class="mb-4 flex flex-wrap items-center gap-2">
+                                        <?php if ($requiresPayment): ?>
+                                            <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                                <i class="fas fa-lock mr-1"></i>
+                                                Paid • MK <?= number_format((float) ($paper['price'] ?? 0), 0) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                                                <i class="fas fa-check-circle mr-1"></i>
+                                                Free Download
+                                            </span>
+                                        <?php endif; ?>
+
+                                        <?php if ($requiresPayment && $hasPaidAccess): ?>
+                                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                                                <i class="fas fa-unlock mr-1"></i>
+                                                Access unlocked
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="mb-4 border-t border-gray-100 pt-4 text-sm text-gray-500">
+                                        <i class="fas fa-user mr-1 text-primary"></i>
                                         <?php if (!empty($paper['first_name']) || !empty($paper['last_name'])): ?>
                                             Added by <?= esc($paper['first_name'] . ' ' . $paper['last_name']) ?>
                                         <?php else: ?>
@@ -213,36 +239,43 @@
                                         <?php endif; ?>
                                     </div>
 
-                                    <!-- Download Button -->
-                                    <a href="<?= site_url('resources/past-papers/download/' . $paper['id']) ?>"
-                                       class="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center font-medium"
-                                       target="_blank">
-                                        <i class="fas fa-download mr-2"></i>
-                                        Download PDF
+                                    <a href="<?= ($requiresPayment && !$hasPaidAccess)
+                                        ? site_url('resources/past-papers/pay/' . $paper['id'])
+                                        : site_url('resources/past-papers/download/' . $paper['id']) ?>"
+                                       class="flex w-full items-center justify-center rounded-xl py-3 px-4 font-semibold text-white transition <?= ($requiresPayment && !$hasPaidAccess) ? 'bg-amber-600 hover:bg-amber-700 shadow-lg shadow-amber-100' : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-100' ?>">
+                                        <i class="fas <?= ($requiresPayment && !$hasPaidAccess) ? 'fa-credit-card' : 'fa-download' ?> mr-2"></i>
+                                        <?php if ($requiresPayment && !$hasPaidAccess): ?>
+                                            Pay MK <?= number_format((float) ($paper['price'] ?? 0), 0) ?> to Download
+                                        <?php else: ?>
+                                            Download PDF
+                                        <?php endif; ?>
                                     </a>
                                 </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
+
+                    <?php if ($resource_type === 'all'): ?>
+                        <div class="mt-8 flex justify-center">
+                            <a href="<?= site_url('resources?type=papers') ?>" class="inline-flex items-center rounded-full border border-primary bg-white px-6 py-3 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white">
+                                View all past papers <i class="fas fa-arrow-right ml-2"></i>
+                            </a>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 
             <!-- Video Solutions Section -->
             <?php if ($showVideos): ?>
                 <div class="mb-12">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-2xl font-bold text-gray-900 flex items-center">
+                    <div class="mb-6 flex items-center justify-between gap-4">
+                        <h2 class="flex items-center text-2xl font-bold text-gray-900">
                             <i class="fas fa-video mr-3 text-primary"></i>
                             Video Solutions
-                            <span class="ml-2 bg-red-100 text-red-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                            <span class="ml-3 rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
                                 <?= count($videos) ?> available
                             </span>
                         </h2>
-                        <?php if ($resource_type === 'all'): ?>
-                            <a href="<?= site_url('resources?type=videos') ?>" class="text-primary hover:text-red-700 font-medium">
-                                View all videos <i class="fas fa-arrow-right ml-1"></i>
-                            </a>
-                        <?php endif; ?>
                     </div>
 
                     <!-- Featured Videos Carousel (only show on 'all' or 'videos' page) -->
@@ -258,8 +291,7 @@
                                 foreach ($displayFeatured as $video):
                                 ?>
                                     <a href="<?= site_url('resources/video/' . $video['id']) ?>" class="group">
-                                        <div class="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1">
-                                            <!-- Video Thumbnail -->
+                                        <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl">
                                             <div class="relative bg-gradient-to-br from-gray-100 to-gray-200 h-48 flex items-center justify-center overflow-hidden">
                                                 <?php if ($video['video_platform'] === 'youtube'): ?>
                                                     <img src="https://img.youtube.com/vi/<?= esc($video['video_id']) ?>/mqdefault.jpg"
@@ -274,9 +306,8 @@
                                                     </div>
                                                 </div>
 
-                                                <!-- Featured Badge -->
                                                 <div class="absolute top-3 left-3">
-                                                    <span class="bg-gradient-to-r from-primary to-red-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center shadow-lg">
+                                                    <span class="flex items-center rounded-full bg-gradient-to-r from-primary to-red-600 px-3 py-1 text-xs font-bold text-white shadow-lg">
                                                         <i class="fas fa-star mr-1"></i>Featured
                                                     </span>
                                                 </div>
@@ -290,30 +321,28 @@
                                                 </div>
                                             </div>
 
-                                            <!-- Content -->
-                                            <div class="p-4">
-                                                <h3 class="font-bold text-lg text-gray-900 group-hover:text-primary transition-colors mb-2 line-clamp-2">
+                                            <div class="p-5">
+                                                <h3 class="mb-3 line-clamp-2 text-lg font-bold text-gray-900 transition-colors group-hover:text-primary">
                                                     <?= esc($video['title']) ?>
                                                 </h3>
 
-                                                <div class="flex items-center justify-between mb-3">
-                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                <div class="mb-4 flex flex-wrap items-center gap-2">
+                                                    <span class="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-100">
                                                         <i class="fas fa-graduation-cap mr-1"></i>
                                                         <?= esc($video['exam_body']) ?>
                                                     </span>
-                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                    <span class="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
                                                         <i class="fas fa-book mr-1"></i>
                                                         <?= esc($video['subject']) ?>
                                                     </span>
                                                 </div>
 
-                                                <div class="flex items-center text-sm text-gray-600 mb-3">
-                                                    <i class="fas fa-user mr-2 text-gray-400"></i>
+                                                <div class="mb-4 flex items-center text-sm text-gray-600">
+                                                    <i class="fas fa-user mr-2 text-primary"></i>
                                                     <span class="font-medium"><?= esc($video['first_name'] . ' ' . $video['last_name']) ?></span>
                                                 </div>
 
-                                                <!-- CTA Button -->
-                                                <div class="bg-purple-600 text-white py-2 px-3 rounded-lg font-medium text-sm hover:bg-purple-700 transition flex items-center justify-center">
+                                                <div class="flex items-center justify-center rounded-xl bg-secondary py-3 px-3 text-sm font-semibold text-white transition hover:bg-accent">
                                                     <i class="fas fa-play mr-2"></i>Watch Now
                                                 </div>
                                             </div>
@@ -331,8 +360,7 @@
                         foreach ($displayVideos as $video):
                         ?>
                             <a href="<?= site_url('resources/video/' . $video['id']) ?>" class="group">
-                                <div class="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1">
-                                    <!-- Video Thumbnail -->
+                                <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl">
                                     <div class="relative bg-gradient-to-br from-gray-100 to-gray-200 h-40 flex items-center justify-center overflow-hidden">
                                         <?php if ($video['video_platform'] === 'youtube'): ?>
                                             <img src="https://img.youtube.com/vi/<?= esc($video['video_id']) ?>/mqdefault.jpg"
@@ -347,7 +375,6 @@
                                             </div>
                                         </div>
 
-                                        <!-- View Count -->
                                         <div class="absolute top-2 right-2">
                                             <span class="bg-black bg-opacity-70 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center">
                                                 <i class="fas fa-eye mr-1"></i>
@@ -355,38 +382,35 @@
                                             </span>
                                         </div>
 
-                                        <!-- Featured Badge (for non-carousel videos) -->
                                         <?php if (($video['featured_level'] ?? '') === 'standard'): ?>
                                             <div class="absolute top-2 left-2">
-                                                <span class="bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                                <span class="rounded-full bg-secondary px-3 py-1 text-xs font-bold text-white shadow-sm">
                                                     Verified
                                                 </span>
                                             </div>
                                         <?php endif; ?>
                                     </div>
 
-                                    <!-- Content -->
-                                    <div class="p-4">
-                                        <h3 class="font-semibold text-gray-900 group-hover:text-purple-600 transition-colors mb-2 line-clamp-2 leading-tight">
+                                    <div class="p-5">
+                                        <h3 class="mb-3 line-clamp-2 leading-tight text-base font-bold text-gray-900 transition-colors group-hover:text-primary">
                                             <?= esc($video['title']) ?>
                                         </h3>
 
-                                        <div class="flex items-center justify-between mb-2">
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                        <div class="mb-3 flex flex-wrap items-center gap-2">
+                                            <span class="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-100">
                                                 <?= esc($video['exam_body']) ?>
                                             </span>
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <span class="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
                                                 <?= esc($video['subject']) ?>
                                             </span>
                                         </div>
 
-                                        <div class="flex items-center text-xs text-gray-600 mb-3">
-                                            <i class="fas fa-user mr-1 text-gray-400"></i>
+                                        <div class="mb-4 flex items-center text-xs text-gray-600">
+                                            <i class="fas fa-user mr-1 text-primary"></i>
                                             <span class="font-medium truncate"><?= esc($video['first_name'] . ' ' . $video['last_name']) ?></span>
                                         </div>
 
-                                        <!-- CTA Button -->
-                                        <div class="bg-purple-600 text-white py-2 px-3 rounded-lg font-medium text-sm hover:bg-purple-700 transition flex items-center justify-center">
+                                        <div class="flex items-center justify-center rounded-xl bg-secondary py-3 px-3 text-sm font-semibold text-white transition hover:bg-accent">
                                             <i class="fas fa-play mr-2"></i>Watch Solution
                                         </div>
                                     </div>
@@ -394,6 +418,14 @@
                             </a>
                         <?php endforeach; ?>
                     </div>
+
+                    <?php if ($resource_type === 'all'): ?>
+                        <div class="mt-8 flex justify-center">
+                            <a href="<?= site_url('resources?type=videos') ?>" class="inline-flex items-center rounded-full border border-secondary bg-white px-6 py-3 text-sm font-semibold text-secondary transition hover:bg-secondary hover:text-white">
+                                View all video solutions <i class="fas fa-arrow-right ml-2"></i>
+                            </a>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 
