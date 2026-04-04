@@ -156,6 +156,7 @@ class Home extends BaseController
                    ->where('users.is_verified', 1)
                    ->where('users.is_active', 1)
                    ->where('tutor_subscriptions.status', 'active')
+                   ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                    ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
                             ->orderBy("CASE subscription_plans.badge_level
                                 WHEN 'master' THEN 5

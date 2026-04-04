@@ -12,6 +12,53 @@
     </div>
 </div>
 
+<?php if (!empty($expired_subscription_alerts)): ?>
+<div class="content-card renewal-alert-card" style="margin-bottom: 24px; border-left: 5px solid #f59e0b;">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <div style="width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="fas fa-bell"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 20px; font-weight: 700; color: var(--text-dark);">Renewal Alert</h3>
+                    <p style="margin: 2px 0 0; color: var(--text-light);">
+                        <?php echo number_format($stats['expired_subscriptions'] ?? count($expired_subscription_alerts)); ?> expired tutor plan<?php echo (($stats['expired_subscriptions'] ?? count($expired_subscription_alerts)) == 1) ? '' : 's'; ?> need renewal follow-up.
+                    </p>
+                </div>
+            </div>
+            <div style="display: grid; gap: 10px;">
+                <?php foreach ($expired_subscription_alerts as $alert): ?>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.18); border-radius: 14px; padding: 12px 14px; flex-wrap: wrap;">
+                        <div>
+                            <div style="font-weight: 700; color: var(--text-dark);">
+                                <?php echo esc(trim(($alert['first_name'] ?? '') . ' ' . ($alert['last_name'] ?? ''))); ?>
+                                <span style="font-weight: 600; color: #b45309;">• <?php echo esc($alert['plan_name'] ?? 'Plan'); ?></span>
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-light); margin-top: 3px;">
+                                <?php echo esc($alert['email'] ?? ''); ?> | Expired on <?php echo !empty($alert['current_period_end']) ? date('M d, Y', strtotime($alert['current_period_end'])) : 'N/A'; ?>
+                            </div>
+                        </div>
+                        <a href="<?php echo base_url('admin/tutor-subscriptions'); ?>" class="renewal-alert-link" style="text-decoration: none; font-size: 13px; font-weight: 700; color: #b45309;">
+                            Review Renewal
+                        </a>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <?php if (($stats['expired_subscriptions'] ?? 0) > count($expired_subscription_alerts)): ?>
+                <div style="margin-top: 10px; font-size: 13px; color: var(--text-light);">
+                    Showing latest <?php echo count($expired_subscription_alerts); ?> expired plans.
+                </div>
+            <?php endif; ?>
+        </div>
+        <a href="<?php echo base_url('admin/tutor-subscriptions'); ?>" class="btn-admin" style="align-self: center;">
+            <i class="fas fa-sync-alt"></i>
+            <span>Manage Renewals</span>
+        </a>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Stats Grid -->
 <div class="stats-grid">
     <div class="stat-card">
@@ -200,6 +247,14 @@
 a.content-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.renewal-alert-card:hover {
+    transform: none;
+}
+
+.renewal-alert-link:hover {
+    color: #92400e;
 }
 </style>
 

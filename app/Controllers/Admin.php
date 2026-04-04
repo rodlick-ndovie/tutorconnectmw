@@ -768,19 +768,22 @@ class Admin extends BaseController
             $freePlan = $subscriptionPlanModel->where('price_monthly', 0)->where('is_active', 1)->first();
 
             if ($freePlan) {
+                $now = date('Y-m-d H:i:s');
+                $trialEnd = $tutorSubscriptionModel->calculatePeriodEnd($now, 1);
                 $subscriptionData = [
                     'user_id' => $userId,
                     'plan_id' => $freePlan['id'],
                     'status' => 'active',
-                    'current_period_start' => date('Y-m-d H:i:s'),
-                    'current_period_end' => date('Y-m-d H:i:s', strtotime('+30 days')),
+                    'current_period_start' => $now,
+                    'current_period_end' => $trialEnd,
+                    'billing_months' => 1,
                     'cancel_at_period_end' => false,
                     'payment_method' => 'free_trial',
                     'payment_amount' => 0,
-                    'payment_date' => date('Y-m-d H:i:s'),
+                    'payment_date' => $now,
                     'payment_status' => 'verified',
-                    'trial_end' => date('Y-m-d H:i:s', strtotime('+30 days')),
-                    'updated_at' => date('Y-m-d H:i:s')
+                    'trial_end' => $trialEnd,
+                    'updated_at' => $now
                 ];
 
                 if ($existingSubscription) {
@@ -794,6 +797,8 @@ class Admin extends BaseController
                     $tutorSubscriptionModel->insert($subscriptionData);
                     log_message('info', 'Created free trial subscription for tutor ' . $userId);
                 }
+
+                $tutorSubscriptionModel->syncUserSubscriptionState((int) $userId, false);
             } else {
                 log_message('warning', 'Free trial plan not found - tutor approved but no subscription created');
             }
@@ -1780,6 +1785,7 @@ info@tutorconnectmw.com | +265 992 313 978";
         }
 
         // Check if plan has active subscriptions
+        $this->tutorSubscriptionModel->markExpiredSubscriptions();
         $activeSubscriptions = $this->tutorSubscriptionModel->where('plan_id', $planId)->where('status', 'active')->countAllResults();
         if ($activeSubscriptions > 0) {
             return redirect()->to('admin/subscriptions')->with('error', 'Cannot delete plan with active subscriptions.');
@@ -1801,9 +1807,31 @@ info@tutorconnectmw.com | +265 992 313 978";
 
         // Get all tutor subscriptions with details
         $data['subscriptions'] = $this->tutorSubscriptionModel->getAllWithDetails();
+        $now = time();
+
+        $data['subscriptions'] = array_map(function ($subscription) use ($now) {
+            $startTime = !empty($subscription['current_period_start']) ? strtotime($subscription['current_period_start']) : null;
+            $endTime = !empty($subscription['current_period_end']) ? strtotime($subscription['current_period_end']) : null;
+
+            $subscription['display_status'] = $subscription['status'];
+            $subscription['is_currently_active'] = $subscription['status'] === 'active'
+                && ($startTime === null || $startTime <= $now)
+                && ($endTime === null || $endTime >= $now);
+
+            if ($subscription['status'] === 'active' && $startTime !== null && $startTime > $now) {
+                $subscription['display_status'] = 'scheduled';
+                $subscription['is_currently_active'] = false;
+            } elseif ($subscription['status'] === 'active' && $endTime !== null && $endTime < $now) {
+                $subscription['display_status'] = 'expired';
+                $subscription['is_currently_active'] = false;
+            }
+
+            return $subscription;
+        }, $data['subscriptions']);
+
         $data['total_subscriptions'] = count($data['subscriptions']);
         $data['active_subscriptions'] = count(array_filter($data['subscriptions'], function($sub) {
-            return $sub['status'] == 'active';
+            return !empty($sub['is_currently_active']);
         }));
 
         // Debug logging
@@ -1814,7 +1842,7 @@ info@tutorconnectmw.com | +265 992 313 978";
 
         // Calculate revenue from active subscriptions only
         $activeSubscriptions = array_filter($data['subscriptions'], function($sub) {
-            return $sub['status'] == 'active';
+            return !empty($sub['is_currently_active']);
         });
         $totalMonthlyRevenue = array_sum(array_column($activeSubscriptions, 'price_monthly'));
 
@@ -1823,10 +1851,10 @@ info@tutorconnectmw.com | +265 992 313 978";
             'total_subscriptions' => $data['total_subscriptions'],
             'active_subscriptions' => $data['active_subscriptions'],
             'inactive_subscriptions' => count(array_filter($data['subscriptions'], function($sub) {
-                return $sub['status'] == 'inactive';
+                return ($sub['display_status'] ?? $sub['status']) === 'inactive';
             })),
             'cancelled_subscriptions' => count(array_filter($data['subscriptions'], function($sub) {
-                return $sub['status'] == 'cancelled';
+                return ($sub['display_status'] ?? $sub['status']) === 'cancelled';
             })),
             'total_monthly_revenue' => $totalMonthlyRevenue,
         ];
@@ -1877,11 +1905,13 @@ info@tutorconnectmw.com | +265 992 313 978";
             'plan_id' => $planId,
             'status' => 'active',
             'current_period_start' => date('Y-m-d H:i:s'),
-            'current_period_end' => date('Y-m-d H:i:s', strtotime('+30 days')),
+            'current_period_end' => $this->tutorSubscriptionModel->calculatePeriodEnd(date('Y-m-d H:i:s'), 1),
+            'billing_months' => 1,
             'cancel_at_period_end' => false,
         ];
 
         if ($this->tutorSubscriptionModel->insert($subscriptionData)) {
+            $this->tutorSubscriptionModel->syncUserSubscriptionState((int) $userId);
             return redirect()->to('admin/tutor_subscriptions')->with('success', 'Subscription assigned successfully!');
         }
 
@@ -1902,7 +1932,33 @@ info@tutorconnectmw.com | +265 992 313 978";
             return redirect()->back()->with('error', 'Invalid status provided.');
         }
 
-        if ($this->tutorSubscriptionModel->update($subscriptionId, ['status' => $status])) {
+        $subscription = $this->tutorSubscriptionModel->find($subscriptionId);
+        if (!$subscription) {
+            return redirect()->to('admin/tutor_subscriptions')->with('error', 'Subscription not found.');
+        }
+
+        if ($status === 'active') {
+            $activationDate = $subscription['status'] === 'pending'
+                ? ($subscription['payment_date'] ?: date('Y-m-d H:i:s'))
+                : date('Y-m-d H:i:s');
+
+            $updatedSubscription = $this->tutorSubscriptionModel->activateSubscription((int) $subscriptionId, $activationDate);
+
+            if ($updatedSubscription) {
+                return redirect()->to('admin/tutor_subscriptions')->with('success', 'Subscription status updated successfully!');
+            }
+
+            return redirect()->to('admin/tutor_subscriptions')->with('error', 'Failed to activate subscription.');
+        }
+
+        $updateData = ['status' => $status];
+
+        if ($status === 'cancelled' && (($subscription['payment_status'] ?? null) === 'pending' || $subscription['status'] === 'pending')) {
+            $updateData['payment_status'] = 'rejected';
+        }
+
+        if ($this->tutorSubscriptionModel->update($subscriptionId, $updateData)) {
+            $this->tutorSubscriptionModel->syncUserSubscriptionState((int) $subscription['user_id']);
             return redirect()->to('admin/tutor_subscriptions')->with('success', 'Subscription status updated successfully!');
         }
 
@@ -1916,7 +1972,12 @@ info@tutorconnectmw.com | +265 992 313 978";
             return redirect()->to('admin/tutor-subscriptions');
         }
 
+        $subscription = $this->tutorSubscriptionModel->find($subscriptionId);
+
         if ($this->tutorSubscriptionModel->delete($subscriptionId)) {
+            if ($subscription) {
+                $this->tutorSubscriptionModel->syncUserSubscriptionState((int) $subscription['user_id']);
+            }
             return redirect()->to('admin/tutor-subscriptions')->with('success', 'Subscription removed successfully!');
         }
 

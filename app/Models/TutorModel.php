@@ -111,6 +111,7 @@ class TutorModel extends Model
                        ->where('users.is_verified', 1)           // Must be verified
                        ->where('users.is_active', 1)             // User account must be active
                        ->where('tutor_subscriptions.status', 'active')
+                       ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                        ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
                        ->groupBy('users.id'); // Prevent duplicate results from joins
 
@@ -211,6 +212,7 @@ class TutorModel extends Model
                                ->where('users.is_verified', 1)
                                ->where('users.is_active', 1)
                                ->where('tutor_subscriptions.status', 'active')
+                               ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                                ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
                                ->findAll();
 
@@ -227,6 +229,7 @@ class TutorModel extends Model
                            ->where('users.is_verified', 1)
                            ->where('users.is_active', 1)
                            ->where('tutor_subscriptions.status', 'active')
+                           ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                            ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
                            ->where('users.search_count >', 0)
                            ->orderBy('users.search_count', 'DESC')
@@ -258,6 +261,7 @@ class TutorModel extends Model
                            ->where('users.rating >=', 4.0)  // Only tutors with 4+ rating
                            ->where('users.review_count >=', 1)  // At least 1 review
                            ->where('tutor_subscriptions.status', 'active')
+                           ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                            ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
                            ->orderBy('users.rating', 'DESC')
                            ->orderBy('users.review_count', 'DESC')

@@ -56,7 +56,7 @@ class Checkout extends BaseController
         }
 
         // Check if user already has an active subscription they would be upgrading from
-        $currentSubscription = $this->tutorSubscriptionModel->getActiveSubscription($userId);
+        $currentSubscription = $this->tutorSubscriptionModel->getSubscriptionWithPlan($userId);
 
         $data = [
             'title' => 'Checkout - ' . $plan['name'] . ' Plan',
@@ -68,6 +68,8 @@ class Checkout extends BaseController
                 'features' => isset($plan['features']) ? json_decode($plan['features'], true) : [],
                 'formatted_price' => number_format($plan['price_monthly'], 0, ',', ','),
             ],
+            'default_billing_months' => 1,
+            'max_billing_months' => 120,
             'user' => [
                 'id' => $currentUser['id'],
                 'first_name' => $currentUser['first_name'],
@@ -76,8 +78,11 @@ class Checkout extends BaseController
                 'phone' => $currentUser['phone']
             ],
             'current_subscription' => $currentSubscription ? [
+                'id' => $currentSubscription['id'],
+                'plan_id' => $currentSubscription['plan_id'],
                 'plan_name' => $currentSubscription['plan_name'] ?? 'Active Plan',
-                'status' => $currentSubscription['status']
+                'status' => $currentSubscription['status'],
+                'current_period_end' => $currentSubscription['current_period_end'] ?? null,
             ] : null,
             'payment_methods' => [
                 'bank_transfer' => 'Bank Transfer',
@@ -106,12 +111,14 @@ class Checkout extends BaseController
         // Get POST data
         $planId = $this->request->getPost('plan_id');
         $termsAccepted = $this->request->getPost('terms_accepted');
+        $billingMonths = $this->tutorSubscriptionModel->normalizeBillingMonths($this->request->getPost('billing_months'));
 
         // Validate required fields
         $validation = \Config\Services::validation();
         $validation->setRules([
             'plan_id' => 'required|numeric',
             'terms_accepted' => 'required',
+            'billing_months' => 'permit_empty|integer|greater_than_equal_to[1]|less_than_equal_to[120]',
         ]);
 
         if (!$validation->withRequest($this->request)->run()) {
@@ -138,8 +145,12 @@ class Checkout extends BaseController
         }
 
         // Determine if this is a free plan
-        $expectedAmount = $plan['price_monthly'];
-        $isFreePlan = $expectedAmount == 0;
+        $monthlyPrice = (float) $plan['price_monthly'];
+        $isFreePlan = $monthlyPrice == 0.0;
+        if ($isFreePlan) {
+            $billingMonths = 1;
+        }
+        $expectedAmount = round($monthlyPrice * $billingMonths, 2);
 
         // Check if tutor has already used a free trial
         $hasUsedFreeTrial = false;
@@ -177,9 +188,7 @@ class Checkout extends BaseController
                 // Calculate new billing period starting from plan change
                 $changeDate = date('Y-m-d H:i:s');
                 $newPeriodStart = $changeDate;
-                // Calculate next month's same date (not just +30 days)
-                $nextMonth = date('Y-m-d H:i:s', strtotime($changeDate . ' +1 month'));
-                $newPeriodEnd = $nextMonth;
+                $newPeriodEnd = $this->tutorSubscriptionModel->calculatePeriodEnd($changeDate, 1);
 
                 // Check if user already has an active subscription
                 $existingSubscription = $this->tutorSubscriptionModel->getActiveSubscription($userId);
@@ -191,6 +200,7 @@ class Checkout extends BaseController
                         'status' => 'active',
                         'current_period_start' => $newPeriodStart,
                         'current_period_end' => $newPeriodEnd,
+                        'billing_months' => 1,
                         'payment_method' => 'free_plan',
                         'payment_amount' => 0,
                         'payment_date' => $changeDate,
@@ -208,6 +218,7 @@ class Checkout extends BaseController
                         'status' => 'active',
                         'current_period_start' => $newPeriodStart,
                         'current_period_end' => $newPeriodEnd,
+                        'billing_months' => 1,
                         'cancel_at_period_end' => false,
                         'payment_method' => 'free_plan',
                         'payment_amount' => 0,
@@ -219,6 +230,8 @@ class Checkout extends BaseController
                         'updated_at' => $changeDate
                     ]);
                 }
+
+                $this->tutorSubscriptionModel->syncUserSubscriptionState($userId, false);
 
                 // Reset usage counters when subscription is activated/changed
                 $this->resetUsageCountersOnPlanChange($userId);
@@ -233,21 +246,17 @@ class Checkout extends BaseController
 
             // For paid plans, return PayChangu configuration for inline checkout
             $txRef = 'TXN-' . $userId . '-' . time() . '-' . uniqid();
+            $subscriptionData = [];
 
-            // DON'T cancel existing subscriptions here - wait for payment confirmation
-            // The webhook will handle upgrading by cancelling old subscriptions only after successful payment
-            $existingActiveSubscription = $this->tutorSubscriptionModel->where('user_id', $userId)
-                ->where('status', 'active')
-                ->first();
+            $existingSamePlanCoverage = $this->tutorSubscriptionModel->getLatestActiveSubscription($userId, (int) $planId);
+            $currentActiveSubscription = $this->tutorSubscriptionModel->getActiveSubscription($userId);
 
-            log_message('info', 'Checking for existing active subscription for user ' . $userId . ': ' . ($existingActiveSubscription ? 'Found ID ' . $existingActiveSubscription['id'] : 'None found'));
-
-            if ($existingActiveSubscription) {
-                // Just log that this is an upgrade attempt - don't cancel yet
-                log_message('info', 'Upgrade attempt: User has existing active subscription ID: ' . $existingActiveSubscription['id'] . ' - will upgrade after payment confirmation');
-                // Store reference to existing subscription for upgrade handling
-                $subscriptionData['upgrading_from'] = $existingActiveSubscription['id'];
-                log_message('info', 'Set upgrading_from to: ' . $subscriptionData['upgrading_from']);
+            if ($existingSamePlanCoverage) {
+                $subscriptionData['upgrading_from'] = $existingSamePlanCoverage['id'];
+                log_message('info', 'Renewal attempt: extending subscription chain from ID ' . $existingSamePlanCoverage['id'] . ' for user ' . $userId);
+            } elseif ($currentActiveSubscription) {
+                $subscriptionData['upgrading_from'] = $currentActiveSubscription['id'];
+                log_message('info', 'Plan switch attempt: replacing active subscription ID ' . $currentActiveSubscription['id'] . ' for user ' . $userId);
             } else {
                 log_message('info', 'No existing active subscription found for user ' . $userId);
             }
@@ -258,9 +267,10 @@ class Checkout extends BaseController
             $subscriptionData = array_merge($subscriptionData, [
                 'user_id' => $userId,
                 'plan_id' => $planId,
+                'billing_months' => $billingMonths,
                 'status' => 'pending',
                 'current_period_start' => date('Y-m-d H:i:s'),
-                'current_period_end' => date('Y-m-d H:i:s', strtotime('+30 days')),
+                'current_period_end' => $this->tutorSubscriptionModel->calculatePeriodEnd(date('Y-m-d H:i:s'), $billingMonths),
                 'cancel_at_period_end' => false,
                 'payment_method' => 'paychangu',
                 'payment_amount' => $expectedAmount,
@@ -286,6 +296,7 @@ class Checkout extends BaseController
             // Based on PayChangu's documentation, we can construct the URL directly
             try {
                 $hostedCheckoutUrl = 'https://paychangu.com/checkout';
+                $durationLabel = $billingMonths === 1 ? '1 month' : $billingMonths . ' months';
 
                 $params = [
                     'public_key' => getenv('PAYCHANGU_PUBLIC_KEY') ?: 'PUB-TEST-MB33j3iotOje4NXksN3UxQh8D9vZDYTk',
@@ -298,10 +309,11 @@ class Checkout extends BaseController
                     'callback_url' => base_url('checkout/paychangu/callback'),
                     'return_url' => base_url('trainer/checkout/paychangu/return'),
                     'customization[title]' => 'TutorConnect Malawi - ' . $plan['name'] . ' Plan',
-                    'customization[description]' => $plan['name'] . ' subscription plan for educational services',
+                    'customization[description]' => $plan['name'] . ' subscription plan for ' . $durationLabel,
                     'meta[plan_id]' => $planId,
                     'meta[plan_name]' => $plan['name'],
-                    'meta[user_email]' => $currentUser['email']
+                    'meta[user_email]' => $currentUser['email'],
+                    'meta[billing_months]' => $billingMonths,
                 ];
 
                 $queryString = http_build_query($params);
@@ -326,12 +338,13 @@ class Checkout extends BaseController
                         ],
                         'customizations' => [
                             'title' => 'TutorConnect Malawi - ' . $plan['name'] . ' Plan',
-                            'description' => $plan['name'] . ' subscription plan for educational services',
+                            'description' => $plan['name'] . ' subscription plan for ' . $durationLabel,
                             'logo' => base_url('favicon.ico')
                         ],
                         'meta' => [
                             'plan_id' => $planId,
                             'plan_name' => $plan['name'],
+                            'billing_months' => $billingMonths,
                             'user_email' => $currentUser['email'],
                             'user_name' => $currentUser['first_name'] . ' ' . $currentUser['last_name']
                         ]
@@ -383,49 +396,29 @@ class Checkout extends BaseController
             return $this->showPaymentResult('error', 'Payment record not found. Please contact support.');
         }
 
+        if ($subscription['payment_status'] === 'verified' && $subscription['status'] === 'active') {
+            return $this->showPaymentResult('success', $this->buildActivationSuccessMessage($subscription), $subscription);
+        }
+
         // SINCE USER WAS REDIRECTED HERE BY PAYCHANGU, TRUST IT AS SUCCESS
         // PayChangu only redirects to return_url for completed payments
         log_message('info', 'PayChangu return: User redirected to return URL - TRUSTING AS SUCCESS for tx_ref: ' . $txRef);
 
-                // Use the actual payment_date from the subscription record as the billing period start
-                $activationDate = $subscription['payment_date'] ?: date('Y-m-d H:i:s');
-                $newPeriodStart = $activationDate;
-                // Calculate next month's same date (not just +30 days)
-                $nextMonth = date('Y-m-d H:i:s', strtotime($activationDate . ' +1 month'));
-                $newPeriodEnd = $nextMonth;
+        $updatedSubscription = $this->tutorSubscriptionModel->activateSubscription((int) $subscription['id']);
 
-                log_message('info', 'PayChangu return: Using payment_date ' . $activationDate . ' as billing period start');
+        if (!$updatedSubscription) {
+            log_message('error', 'PayChangu return: Failed to activate subscription for tx_ref: ' . $txRef);
+            return $this->showPaymentResult('error', 'We could not activate this subscription automatically. Please contact support.');
+        }
 
-                // ACTIVATE PAYMENT IMMEDIATELY SINCE USER WAS REDIRECTED HERE
-                $this->tutorSubscriptionModel->update($subscription['id'], [
-                    'status' => 'active',
-                    'payment_status' => 'verified',
-                    'current_period_start' => $newPeriodStart,
-                    'current_period_end' => $newPeriodEnd,
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]);
+        if ($this->shouldResetUsageCounters($updatedSubscription)) {
+            $this->resetUsageCountersOnPlanChange($updatedSubscription['user_id']);
+        }
 
-                // Reset usage counters when subscription is activated/changed
-                $this->resetUsageCountersOnPlanChange($subscription['user_id']);
-
-                // Handle plan upgrades
-                if (isset($subscription['upgrading_from']) && !empty($subscription['upgrading_from'])) {
-                    $oldSubscriptionId = $subscription['upgrading_from'];
-                    $this->tutorSubscriptionModel->update($oldSubscriptionId, [
-                        'status' => 'cancelled',
-                        'updated_at' => date('Y-m-d H:i:s')
-                    ]);
-                    log_message('info', 'PayChangu return: Upgrade completed - cancelled old subscription ' . $oldSubscriptionId);
-                }
-
-        // Send success notification
-        $this->sendPaymentSuccessNotification($subscription['user_id'], $subscription);
-
-        // Refetch updated subscription data for success page
-        $updatedSubscription = $this->tutorSubscriptionModel->where('payment_reference', $txRef)->first();
+        $this->sendPaymentSuccessNotification($updatedSubscription['user_id'], $updatedSubscription);
 
         log_message('info', 'PayChangu return: ACTIVATED payment for tx_ref: ' . $txRef . ' (trusted redirect)');
-        return $this->showPaymentResult('success', 'Your payment has been confirmed and your subscription is now active!', $updatedSubscription);
+        return $this->showPaymentResult('success', $this->buildActivationSuccessMessage($updatedSubscription), $updatedSubscription);
     }
 
     /**
@@ -595,39 +588,19 @@ class Checkout extends BaseController
                       ', final_success=' . ($isPaymentSuccessful ? 'yes' : 'no'));
 
             if ($isPaymentSuccessful) {
-                // Use the actual payment_date from the subscription record as the billing period start
-                $activationDate = $subscription['payment_date'] ?: date('Y-m-d H:i:s');
-                $newPeriodStart = $activationDate;
-                // Calculate next month's same date (not just +30 days)
-                $nextMonth = date('Y-m-d H:i:s', strtotime($activationDate . ' +1 month'));
-                $newPeriodEnd = $nextMonth;
+                $updatedSubscription = $this->tutorSubscriptionModel->activateSubscription((int) $subscription['id']);
 
-                log_message('info', 'PayChangu callback: Using payment_date ' . $activationDate . ' as billing period start');
+                if (!$updatedSubscription) {
+                    log_message('error', 'PayChangu callback: Activation failed for tx_ref: ' . $txRef);
+                    return $this->response->setStatusCode(500)->setJSON(['status' => 'error', 'message' => 'Subscription activation failed']);
+                }
 
-                // Update payment_status and subscription status using existing model
-                $this->tutorSubscriptionModel->update($subscription['id'], [
-                    'status' => 'active',
-                    'payment_status' => 'verified',
-                    'current_period_start' => $newPeriodStart,
-                    'current_period_end' => $newPeriodEnd,
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]);
-
-                // Reset usage counters when subscription is activated/changed
-                $this->resetUsageCountersOnPlanChange($subscription['user_id']);
-
-                // Handle plan upgrades only after verified success
-                if (isset($subscription['upgrading_from']) && !empty($subscription['upgrading_from'])) {
-                    $oldSubscriptionId = $subscription['upgrading_from'];
-                    $this->tutorSubscriptionModel->update($oldSubscriptionId, [
-                        'status' => 'cancelled',
-                        'updated_at' => date('Y-m-d H:i:s')
-                    ]);
-                    log_message('info', 'PayChangu callback: Upgrade completed - cancelled old subscription ' . $oldSubscriptionId);
+                if ($this->shouldResetUsageCounters($updatedSubscription)) {
+                    $this->resetUsageCountersOnPlanChange($updatedSubscription['user_id']);
                 }
 
                 // Send success notification (idempotent)
-                $this->sendPaymentSuccessNotification($subscription['user_id'], $subscription);
+                $this->sendPaymentSuccessNotification($updatedSubscription['user_id'], $updatedSubscription);
 
                 log_message('info', 'PayChangu callback: SUCCESS - activated subscription ' . $subscription['id'] . ' for tx_ref: ' . $txRef);
 
@@ -656,6 +629,24 @@ class Checkout extends BaseController
             log_message('error', 'PayChangu callback exception: ' . $e->getMessage() . ' for tx_ref: ' . $txRef);
             return $this->response->setStatusCode(500)->setJSON(['status' => 'error', 'message' => 'Internal server error']);
         }
+    }
+
+    private function shouldResetUsageCounters(array $subscription): bool
+    {
+        if (empty($subscription['current_period_start'])) {
+            return false;
+        }
+
+        return strtotime($subscription['current_period_start']) <= time();
+    }
+
+    private function buildActivationSuccessMessage(array $subscription): string
+    {
+        if (!empty($subscription['current_period_start']) && strtotime($subscription['current_period_start']) > time()) {
+            return 'Your payment has been confirmed. Your extra subscription time is queued to continue automatically from ' . date('M j, Y', strtotime($subscription['current_period_start'])) . '.';
+        }
+
+        return 'Your payment has been confirmed and your subscription is now active!';
     }
 
     /**

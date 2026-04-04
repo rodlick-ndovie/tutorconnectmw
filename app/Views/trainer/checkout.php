@@ -392,6 +392,56 @@
             color: var(--primary-color);
         }
 
+        .billing-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .billing-input {
+            width: 92px;
+            padding: 0.55rem 0.7rem;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-align: center;
+            background: var(--bg-secondary);
+        }
+
+        .billing-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(229, 92, 13, 0.12);
+        }
+
+        .billing-suffix {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        .renewal-note {
+            background: rgba(14, 165, 233, 0.08);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            border-radius: 12px;
+            padding: 0.9rem 1rem;
+            margin-top: 1rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.45;
+        }
+
+        .renewal-note i {
+            color: var(--accent-color);
+            margin-top: 0.15rem;
+            flex-shrink: 0;
+        }
+
         /* Payment Methods Styles */
         .payment-methods-section {
             margin-bottom: 1.5rem;
@@ -509,6 +559,9 @@
                 <input type="hidden" name="plan_id" value="<?= $plan['id'] ?>">
 
                 <?php $isFreePlan = $plan['price_monthly'] <= 0; ?>
+                <?php $defaultBillingMonths = (int) ($default_billing_months ?? 1); ?>
+                <?php $maxBillingMonths = (int) ($max_billing_months ?? 120); ?>
+                <?php $isSamePlanRenewal = !empty($current_subscription) && (int) ($current_subscription['plan_id'] ?? 0) === (int) $plan['id']; ?>
 
                 <?php if (!$isFreePlan): ?>
                     <!-- Payment Summary Card -->
@@ -522,10 +575,46 @@
                                 <span class="summary-value"><?= htmlspecialchars($plan['name']) ?> Plan</span>
                             </div>
                             <div class="summary-row">
-                                <span class="summary-label">Amount:</span>
+                                <span class="summary-label">Monthly price:</span>
                                 <span class="summary-price">MWK <?= $plan['formatted_price'] ?>/month</span>
                             </div>
+                            <div class="summary-row">
+                                <label class="summary-label" for="billingMonths">Months:</label>
+                                <div class="billing-control">
+                                    <input
+                                        type="number"
+                                        id="billingMonths"
+                                        name="billing_months"
+                                        class="billing-input"
+                                        value="<?= $defaultBillingMonths ?>"
+                                        min="1"
+                                        max="<?= $maxBillingMonths ?>"
+                                        inputmode="numeric"
+                                    >
+                                    <span class="billing-suffix">months</span>
+                                </div>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Coverage:</span>
+                                <span class="summary-value" id="coverageLabel"><?= $defaultBillingMonths === 1 ? '1 month' : $defaultBillingMonths . ' months' ?></span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Total:</span>
+                                <span class="summary-price" id="totalAmount">MWK <?= number_format(((float) $plan['price_monthly']) * $defaultBillingMonths, 0, ',', ',') ?></span>
+                            </div>
                         </div>
+
+                        <?php if ($isSamePlanRenewal && !empty($current_subscription['current_period_end'])): ?>
+                            <div class="renewal-note">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Any extra months you pay now will be added after your current plan ends on <?= date('M j, Y', strtotime($current_subscription['current_period_end'])) ?>.</span>
+                            </div>
+                        <?php elseif (!empty($current_subscription['current_period_end'])): ?>
+                            <div class="renewal-note">
+                                <i class="fas fa-bolt"></i>
+                                <span>Switching to this plan starts the new subscription immediately after payment. Your current plan will stop once the new one takes over.</span>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Available Payment Methods -->
@@ -559,6 +648,7 @@
                         <span><strong>Secure Payment:</strong> You will be redirected to PayChangu's secure payment gateway to complete your transaction.</span>
                     </div>
                 <?php else: ?>
+                    <input type="hidden" name="billing_months" value="1">
                     <div class="text-center py-5 bg-success text-white rounded" style="border-radius:var(--border-radius);">
                         <i class="fas fa-gift" style="font-size:3rem;"></i>
                         <h4 class="mt-3">FREE Plan Activated!</h4>
@@ -664,6 +754,50 @@
             const isFreePlan = <?= $isFreePlan ? 'true' : 'false' ?>;
             const submitBtn = document.getElementById('submitBtn');
             const btnText = document.getElementById('btnText');
+            const billingMonthsInput = document.getElementById('billingMonths');
+            const coverageLabel = document.getElementById('coverageLabel');
+            const totalAmount = document.getElementById('totalAmount');
+            const monthlyPrice = <?= json_encode((float) $plan['price_monthly']) ?>;
+            const maxBillingMonths = <?= json_encode($maxBillingMonths) ?>;
+
+            function normalizeBillingMonths() {
+                if (!billingMonthsInput) {
+                    return 1;
+                }
+
+                let months = parseInt(billingMonthsInput.value, 10);
+
+                if (Number.isNaN(months) || months < 1) {
+                    months = 1;
+                }
+
+                if (months > maxBillingMonths) {
+                    months = maxBillingMonths;
+                }
+
+                billingMonthsInput.value = months;
+                return months;
+            }
+
+            function formatMwK(amount) {
+                return 'MWK ' + Math.round(amount).toLocaleString('en-US');
+            }
+
+            function updateBillingSummary() {
+                if (!billingMonthsInput || !coverageLabel || !totalAmount) {
+                    return;
+                }
+
+                const months = normalizeBillingMonths();
+                coverageLabel.textContent = months === 1 ? '1 month' : `${months} months`;
+                totalAmount.textContent = formatMwK(monthlyPrice * months);
+            }
+
+            if (billingMonthsInput) {
+                billingMonthsInput.addEventListener('input', updateBillingSummary);
+                billingMonthsInput.addEventListener('change', updateBillingSummary);
+                updateBillingSummary();
+            }
 
             // Form submission
             const form = document.getElementById('checkoutForm');
@@ -671,6 +805,7 @@
                 e.preventDefault();
 
                 try {
+                    normalizeBillingMonths();
                     const formData = new FormData(form);
 
                     // Show loading spinner immediately
@@ -793,6 +928,8 @@
         // Function to check payment status after modal closes
         function checkPaymentStatusAfterModal(txRef) {
             console.log('Checking payment status after modal close for tx_ref:', txRef);
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
 
             // Check immediately
             fetch('<?= base_url('trainer/checkout/checkPaymentStatus') ?>', {

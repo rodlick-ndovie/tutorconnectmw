@@ -93,10 +93,14 @@ class Dashboard extends BaseController
 
         $userModel = $this->getUserModel();
         $tutorModel = new TutorModel();
+        $subscriptionModel = new \App\Models\TutorSubscriptionModel();
         $contactMessageModel = new ContactMessageModel();
         $db = \Config\Database::connect();
         $japanApplicationModel = new JapanApplicationModel();
         $japanApplicationAccessModel = new JapanApplicationAccessModel();
+
+        // Keep subscription statuses fresh before building admin stats/alerts.
+        $subscriptionModel->markExpiredSubscriptions();
 
         // Basic user statistics
         $data['stats'] = [
@@ -135,17 +139,23 @@ class Dashboard extends BaseController
             $totalSubscriptions = $db->table('tutor_subscriptions')->countAllResults();
             $activeSubscriptions = $db->table('tutor_subscriptions')
                 ->where('status', 'active')
+                ->where('current_period_start <=', date('Y-m-d H:i:s'))
                 ->where('current_period_end >=', date('Y-m-d H:i:s'))
+                ->countAllResults();
+            $expiredSubscriptions = $db->table('tutor_subscriptions')
+                ->where('status', 'expired')
                 ->countAllResults();
 
             $data['stats']['total_subscriptions'] = $totalSubscriptions;
             $data['stats']['active_subscriptions'] = $activeSubscriptions;
+            $data['stats']['expired_subscriptions'] = $expiredSubscriptions;
 
             // Calculate subscription revenue (monthly recurring revenue)
             $subscriptionRevenue = $db->table('tutor_subscriptions ts')
                 ->select('SUM(sp.price_monthly) as subscription_revenue')
                 ->join('subscription_plans sp', 'sp.id = ts.plan_id')
                 ->where('ts.status', 'active')
+                ->where('ts.current_period_start <=', date('Y-m-d H:i:s'))
                 ->where('ts.current_period_end >=', date('Y-m-d H:i:s'))
                 ->get()
                 ->getRow();
@@ -158,7 +168,7 @@ class Dashboard extends BaseController
 
             // Calculate total PayChangu revenue (all verified subscription payments)
             $paychanguRevenue = $db->table('tutor_subscriptions ts')
-                ->select('SUM(sp.price_monthly) as paychangu_revenue')
+                ->select('SUM(ts.payment_amount) as paychangu_revenue')
                 ->join('subscription_plans sp', 'sp.id = ts.plan_id')
                 ->where('ts.payment_status', 'verified')
                 ->where('ts.payment_amount >', 0)
@@ -171,8 +181,24 @@ class Dashboard extends BaseController
         } catch (\Exception $e) {
             $data['stats']['total_subscriptions'] = 0;
             $data['stats']['active_subscriptions'] = 0;
+            $data['stats']['expired_subscriptions'] = 0;
             $data['stats']['subscription_revenue'] = 0;
             $data['stats']['paychangu_revenue'] = 0;
+        }
+
+        try {
+            $data['expired_subscription_alerts'] = $db->table('tutor_subscriptions ts')
+                ->select('ts.id, ts.current_period_end, u.id as user_id, u.first_name, u.last_name, u.email, sp.name as plan_name')
+                ->join('users u', 'u.id = ts.user_id')
+                ->join('subscription_plans sp', 'sp.id = ts.plan_id', 'left')
+                ->where('ts.status', 'expired')
+                ->where('u.role', 'trainer')
+                ->orderBy('ts.current_period_end', 'DESC')
+                ->limit(5)
+                ->get()
+                ->getResultArray();
+        } catch (\Throwable $e) {
+            $data['expired_subscription_alerts'] = [];
         }
 
         // Japan application fee totals (Teach in Japan)
@@ -595,6 +621,8 @@ class Dashboard extends BaseController
                 ->join('users u', 'u.id = ts.user_id')
                 ->join('subscription_plans sp', 'sp.id = ts.plan_id')
                 ->where('ts.status', 'active')
+                ->where('ts.current_period_start <=', date('Y-m-d H:i:s'))
+                ->where('ts.current_period_end >=', date('Y-m-d H:i:s'))
                 ->orderBy('ts.created_at', 'DESC')
                 ->limit(2)
                 ->get()

@@ -2,6 +2,12 @@
 
 <?php $active_page = 'tutor_subscriptions'; ?>
 <?php $title = $title ?? 'Tutor Subscriptions - TutorConnect Malawi'; ?>
+<?php
+$expiredSubscriptions = array_values(array_filter($subscriptions ?? [], static function ($subscription) {
+    return strtolower((string) ($subscription['display_status'] ?? $subscription['status'] ?? '')) === 'expired';
+}));
+$expiredPreview = array_slice($expiredSubscriptions, 0, 5);
+?>
 
 <?= $this->section('content') ?>
 
@@ -136,6 +142,50 @@
     color: var(--gray-800);
 }
 
+.renewal-banner {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(217, 119, 6, 0.06));
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-left: 5px solid var(--warning);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.renewal-banner-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.renewal-banner-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(245, 158, 11, 0.18);
+    border-radius: 14px;
+    flex-wrap: wrap;
+}
+
+.renewal-banner-meta {
+    color: var(--gray-600);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.renewal-banner-link {
+    color: #b45309;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.renewal-banner-link:hover {
+    color: #92400e;
+}
+
 .data-table-container {
     background: white;
     border-radius: var(--border-radius);
@@ -230,6 +280,7 @@
 .status-badge.pending { background: var(--warning); color: white; }
 .status-badge.cancelled { background: var(--danger); color: white; }
 .status-badge.expired { background: var(--gray-500); color: white; }
+.status-badge.scheduled { background: var(--secondary); color: white; }
 
 .period-text {
     color: var(--gray-600);
@@ -316,6 +367,54 @@
     <p class="text-muted mb-4">Monitor and manage tutor subscription assignments, payments, and status</p>
 </div>
 
+<?php if (!empty($expiredSubscriptions)): ?>
+<div class="renewal-banner">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 44px; height: 44px; border-radius: 14px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div>
+                    <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--dark);">Renewal Needed</h2>
+                    <p style="margin: 0.2rem 0 0; color: var(--gray-600);">
+                        <?= number_format(count($expiredSubscriptions)) ?> tutor subscription<?= count($expiredSubscriptions) === 1 ? '' : 's' ?> expired and may need follow-up or renewal.
+                    </p>
+                </div>
+            </div>
+
+            <div class="renewal-banner-list">
+                <?php foreach ($expiredPreview as $expiredSubscription): ?>
+                    <div class="renewal-banner-item">
+                        <div>
+                            <div class="tutor-name" style="margin-bottom: 0;">
+                                <?= esc(trim(($expiredSubscription['first_name'] ?? '') . ' ' . ($expiredSubscription['last_name'] ?? ''))) ?>
+                                <span style="font-weight: 600; color: #b45309;">• <?= esc($expiredSubscription['plan_name'] ?? 'Plan') ?></span>
+                            </div>
+                            <div class="renewal-banner-meta">
+                                <?= esc($expiredSubscription['email'] ?? '') ?> | Expired on <?= !empty($expiredSubscription['current_period_end']) ? date('M d, Y', strtotime($expiredSubscription['current_period_end'])) : 'N/A' ?>
+                            </div>
+                        </div>
+                        <a href="#subscriptionsTable" class="renewal-banner-link">Renewal message</a>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <?php if (count($expiredSubscriptions) > count($expiredPreview)): ?>
+                <div style="margin-top: 0.75rem; color: var(--gray-600); font-size: 0.875rem;">
+                    Showing latest <?= count($expiredPreview) ?> expired subscriptions.
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <a href="<?= site_url('admin/tutor-subscriptions') ?>" class="btn-admin" style="align-self: center;">
+            <i class="fas fa-sync-alt"></i>
+            <span>Review Renewals</span>
+        </a>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Statistics Cards -->
 <div class="stats-grid">
     <div class="stat-card">
@@ -386,6 +485,7 @@
             <tbody>
                 <?php $counter = 1; ?>
                 <?php foreach ($subscriptions as $subscription): ?>
+                    <?php $displayStatus = strtolower($subscription['display_status'] ?? $subscription['status']); ?>
                     <tr>
                         <td class="text-center">
                             <span class="badge bg-secondary fw-bold" style="font-size: 0.8rem; padding: 0.375rem 0.5rem; border-radius: 20px;"><?= $counter++ ?></span>
@@ -402,25 +502,37 @@
                             <span class="plan-badge"><?= esc($subscription['plan_name']) ?></span>
                         </td>
                         <td>
-                            <span class="status-badge <?= $subscription['status'] ?>">
-                                <?php if ($subscription['status'] === 'pending'): ?>
+                            <span class="status-badge <?= esc($displayStatus) ?>">
+                                <?php if ($displayStatus === 'pending'): ?>
                                     <i class="fas fa-clock"></i>
+                                <?php elseif ($displayStatus === 'scheduled'): ?>
+                                    <i class="fas fa-calendar-alt"></i>
                                 <?php endif; ?>
-                                <?= ucfirst($subscription['status']) ?>
+                                <?= ucfirst($displayStatus) ?>
                             </span>
+                            <?php if ($displayStatus === 'expired'): ?>
+                                <div class="period-text" style="margin-top: 6px; color: #b45309; font-weight: 600;">
+                                    Renewal needed
+                                </div>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <div class="period-text">
                                 <?= date('M j, Y', strtotime($subscription['current_period_start'])) ?> -
                                 <?= date('M j, Y', strtotime($subscription['current_period_end'])) ?>
                             </div>
+                            <?php if (!empty($subscription['billing_months']) && (int) $subscription['billing_months'] > 1): ?>
+                                <div class="period-text" style="margin-top: 4px;">
+                                    <?= (int) $subscription['billing_months'] ?> months paid
+                                </div>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <div class="price-text">MK<?= number_format($subscription['price_monthly']) ?></div>
                         </td>
                         <td>
                             <div class="action-buttons">
-                                <?php if ($subscription['status'] === 'pending'): ?>
+                                <?php if ($displayStatus === 'pending'): ?>
                                     <!-- Approval buttons for pending subscriptions -->
                                     <button class="btn-action success" onclick="approveSubscription(<?= $subscription['id'] ?>)" title="Approve Payment">
                                         <i class="fas fa-check"></i>
