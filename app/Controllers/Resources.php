@@ -31,6 +31,27 @@ class Resources extends BaseController
         $data = [
             'title' => 'Resources - TutorConnect Malawi',
             'resource_type' => $resourceType,
+            'papers' => [],
+            'videos' => [],
+            'featured_videos' => [],
+            'papers_pagination' => [
+                'page_param' => 'papers_page',
+                'current_page' => 1,
+                'per_page' => 0,
+                'total_items' => 0,
+                'total_pages' => 0,
+                'start_item' => 0,
+                'end_item' => 0,
+            ],
+            'videos_pagination' => [
+                'page_param' => 'videos_page',
+                'current_page' => 1,
+                'per_page' => 0,
+                'total_items' => 0,
+                'total_pages' => 0,
+                'start_item' => 0,
+                'end_item' => 0,
+            ],
         ];
 
         // Get filter parameters
@@ -44,11 +65,27 @@ class Resources extends BaseController
 
         // Get data based on resource type
         if ($resourceType === 'papers' || $resourceType === 'all') {
-            $data['papers'] = $this->pastPapersModel->getFilteredPapersWithUploader($filters);
+            $paperResults = $this->pastPapersModel->getFilteredPapersWithUploader($filters);
+            $paperPagination = $this->paginateItems(
+                $paperResults,
+                $resourceType === 'all' ? 6 : 12,
+                'papers_page'
+            );
+
+            $data['papers'] = $paperPagination['items'];
+            $data['papers_pagination'] = $paperPagination['meta'];
         }
 
         if ($resourceType === 'videos' || $resourceType === 'all') {
-            $data['videos'] = $this->tutorVideosModel->getApprovedVideos($filters);
+            $videoResults = $this->tutorVideosModel->getApprovedVideos($filters);
+            $videoPagination = $this->paginateItems(
+                $videoResults,
+                $resourceType === 'all' ? 8 : 12,
+                'videos_page'
+            );
+
+            $data['videos'] = $videoPagination['items'];
+            $data['videos_pagination'] = $videoPagination['meta'];
             $data['featured_videos'] = $this->tutorVideosModel->getFeaturedVideos();
         }
 
@@ -805,6 +842,33 @@ class Resources extends BaseController
         }
 
         return $this->response->setJSON(['success' => false, 'message' => 'Failed to save paper details.']);
+    }
+
+    private function paginateItems(array $items, int $perPage, string $pageParam): array
+    {
+        $perPage = max(1, $perPage);
+        $totalItems = count($items);
+        $totalPages = $totalItems > 0 ? (int) ceil($totalItems / $perPage) : 0;
+        $currentPage = max(1, (int) $this->request->getGet($pageParam));
+
+        if ($totalPages > 0 && $currentPage > $totalPages) {
+            $currentPage = $totalPages;
+        }
+
+        $offset = ($currentPage - 1) * $perPage;
+
+        return [
+            'items' => array_slice($items, $offset, $perPage),
+            'meta' => [
+                'page_param' => $pageParam,
+                'current_page' => $currentPage,
+                'per_page' => $perPage,
+                'total_items' => $totalItems,
+                'total_pages' => $totalPages,
+                'start_item' => $totalItems > 0 ? $offset + 1 : 0,
+                'end_item' => $totalItems > 0 ? min($offset + $perPage, $totalItems) : 0,
+            ],
+        ];
     }
 
     private function attachPastPaperPaymentData(array $data, array $papers): array

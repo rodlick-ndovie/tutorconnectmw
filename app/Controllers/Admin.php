@@ -2226,29 +2226,7 @@ info@tutorconnectmw.com | +265 992 313 978";
     // Library Management - Past Papers and Resources
     public function library()
     {
-        $pastPapersModel = new \App\Models\PastPapersModel();
-
-        // Get all papers
-        $papers = $pastPapersModel->getAllPapers();
-
-        // Calculate stats
-        $totalDownloads = 0;
-        foreach ($papers as $paper) {
-            $totalDownloads += (int)$paper['download_count'];
-        }
-
-        $data = [
-            'title' => 'Library Management - TutorConnect Malawi',
-            'papers' => $papers,
-            'stats' => [
-                'total_papers' => count($papers),
-                'active_papers' => count(array_filter($papers, function($p) { return $p['is_active'] == 1; })),
-                'inactive_papers' => count(array_filter($papers, function($p) { return $p['is_active'] == 0; })),
-                'total_downloads' => $totalDownloads,
-            ]
-        ];
-
-        return view('admin/library', $data);
+        return $this->resources();
     }
 
 // Add new past paper
@@ -3822,10 +3800,24 @@ info@uprisemw.com | +265 992 313 978";
 
         // Apply pagination manually
         $totalResources = count($resources);
-        $resources = array_slice($resources, ($page - 1) * $perPage, $perPage);
+        $totalPages = $totalResources > 0 ? (int) ceil($totalResources / $perPage) : 0;
+        $page = max(1, (int) $page);
 
-        // Create simple pager
-        $pager = null;
+        if ($totalPages > 0 && $page > $totalPages) {
+            $page = $totalPages;
+        }
+
+        $offset = ($page - 1) * $perPage;
+        $resources = array_slice($resources, $offset, $perPage);
+
+        $pager = [
+            'current_page' => $page,
+            'per_page' => $perPage,
+            'total_items' => $totalResources,
+            'total_pages' => $totalPages,
+            'start_item' => $totalResources > 0 ? $offset + 1 : 0,
+            'end_item' => $totalResources > 0 ? min($offset + $perPage, $totalResources) : 0,
+        ];
 
         // Count pending items
         $pendingCount = $this->pastPapersModel->where('is_active', 0)->countAllResults(false)
@@ -4479,6 +4471,22 @@ info@uprisemw.com | +265 992 313 978";
         }
     }
 
+    private function getLibraryReturnUrl(): string
+    {
+        $fallback = base_url('admin/library');
+        $returnUrl = trim((string) $this->request->getPost('return_url'));
+
+        if ($returnUrl === '') {
+            $returnUrl = trim((string) $this->request->getServer('HTTP_REFERER'));
+        }
+
+        if ($returnUrl === '' || stripos($returnUrl, 'admin/library') === false) {
+            return $fallback;
+        }
+
+        return $returnUrl;
+    }
+
     private function updatePaper($id, bool $isAjax)
     {
         $existingPaper = $this->pastPapersModel->find($id);
@@ -4564,7 +4572,7 @@ info@uprisemw.com | +265 992 313 978";
                 ]);
             }
 
-            return redirect()->to(base_url('admin/library'))->with('success', 'No changes were needed. The past paper is already up to date.');
+            return redirect()->to($this->getLibraryReturnUrl())->with('success', 'No changes were needed. The past paper is already up to date.');
         }
 
         // Handle file upload if new file provided
@@ -4593,7 +4601,7 @@ info@uprisemw.com | +265 992 313 978";
                     'message' => 'Past paper updated successfully'
                 ]);
             }
-            return redirect()->to(base_url('admin/library'))->with('success', 'Past paper updated successfully');
+            return redirect()->to($this->getLibraryReturnUrl())->with('success', 'Past paper updated successfully');
         }
 
         if ($isAjax) {
@@ -4691,7 +4699,7 @@ info@uprisemw.com | +265 992 313 978";
                     'message' => 'Video updated successfully'
                 ]);
             }
-            return redirect()->to(base_url('admin/library'))->with('success', 'Video updated successfully');
+            return redirect()->to($this->getLibraryReturnUrl())->with('success', 'Video updated successfully');
         }
 
         if ($isAjax) {

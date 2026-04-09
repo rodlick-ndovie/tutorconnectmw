@@ -180,9 +180,65 @@
             </div>
 
             <!-- Pagination -->
-            <?php if ($pager): ?>
-                <div style="margin-top: 20px; text-align: center;">
-                    <?= $pager->links() ?>
+            <?php if (!empty($pager) && ($pager['total_pages'] ?? 0) > 1): ?>
+                <?php
+                    $currentPage = (int) ($pager['current_page'] ?? 1);
+                    $totalPages = (int) ($pager['total_pages'] ?? 1);
+                    $startPage = max(1, $currentPage - 2);
+                    $endPage = min($totalPages, $currentPage + 2);
+                    $query = $_GET ?? [];
+                ?>
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-4">
+                    <div>
+                        <small class="text-muted">
+                            Showing <?= $pager['start_item'] ?? 0 ?>-<?= $pager['end_item'] ?? 0 ?> of <?= $pager['total_items'] ?? 0 ?> resources
+                        </small>
+                    </div>
+
+                    <nav aria-label="Library pagination">
+                        <ul class="pagination mb-0">
+                            <?php if ($currentPage > 1): ?>
+                                <?php $prevQuery = array_merge($query, ['page' => $currentPage - 1]); ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= current_url() . '?' . http_build_query($prevQuery) ?>">Previous</a>
+                                </li>
+                            <?php endif; ?>
+
+                            <?php if ($startPage > 1): ?>
+                                <?php $firstQuery = array_merge($query, ['page' => 1]); ?>
+                                <li class="page-item <?= $currentPage === 1 ? 'active' : '' ?>">
+                                    <a class="page-link" href="<?= current_url() . '?' . http_build_query($firstQuery) ?>">1</a>
+                                </li>
+                                <?php if ($startPage > 2): ?>
+                                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                                <?php endif; ?>
+                            <?php endif; ?>
+
+                            <?php for ($pageNumber = $startPage; $pageNumber <= $endPage; $pageNumber++): ?>
+                                <?php $pageQuery = array_merge($query, ['page' => $pageNumber]); ?>
+                                <li class="page-item <?= $pageNumber === $currentPage ? 'active' : '' ?>">
+                                    <a class="page-link" href="<?= current_url() . '?' . http_build_query($pageQuery) ?>"><?= $pageNumber ?></a>
+                                </li>
+                            <?php endfor; ?>
+
+                            <?php if ($endPage < $totalPages): ?>
+                                <?php if ($endPage < $totalPages - 1): ?>
+                                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                                <?php endif; ?>
+                                <?php $lastQuery = array_merge($query, ['page' => $totalPages]); ?>
+                                <li class="page-item <?= $currentPage === $totalPages ? 'active' : '' ?>">
+                                    <a class="page-link" href="<?= current_url() . '?' . http_build_query($lastQuery) ?>"><?= $totalPages ?></a>
+                                </li>
+                            <?php endif; ?>
+
+                            <?php if ($currentPage < $totalPages): ?>
+                                <?php $nextQuery = array_merge($query, ['page' => $currentPage + 1]); ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="<?= current_url() . '?' . http_build_query($nextQuery) ?>">Next</a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
                 </div>
             <?php endif; ?>
         <?php else: ?>
@@ -422,6 +478,7 @@
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" id="edit_id">
                 <input type="hidden" name="resource_type" value="past_paper">
+                <input type="hidden" name="return_url" value="<?= current_url() . (!empty($_SERVER['QUERY_STRING']) ? '?' . $_SERVER['QUERY_STRING'] : '') ?>">
                 <div class="modal-body">
                     <div id="editFormErrors" class="alert alert-danger" style="display:none;"></div>
 
@@ -527,6 +584,7 @@
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" id="edit_video_id">
                 <input type="hidden" name="resource_type" value="video">
+                <input type="hidden" name="return_url" value="<?= current_url() . (!empty($_SERVER['QUERY_STRING']) ? '?' . $_SERVER['QUERY_STRING'] : '') ?>">
                 <div class="modal-body">
                     <div id="editVideoFormErrors" class="alert alert-danger" style="display:none;"></div>
 

@@ -136,6 +136,10 @@
         <?php
         $showPapers = ($resource_type === 'all' || $resource_type === 'papers') && !empty($papers);
         $showVideos = ($resource_type === 'all' || $resource_type === 'videos') && !empty($videos);
+        $papersPagination = $papers_pagination ?? [];
+        $videosPagination = $videos_pagination ?? [];
+        $paperCount = $papersPagination['total_items'] ?? count($papers ?? []);
+        $videoCount = $videosPagination['total_items'] ?? count($videos ?? []);
         ?>
 
         <?php if ($showPapers || $showVideos): ?>
@@ -148,16 +152,13 @@
                             <i class="fas fa-file-pdf mr-3 text-primary"></i>
                             Past Papers
                             <span class="ml-3 rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
-                                <?= count($papers) ?> available
+                                <?= $paperCount ?> available
                             </span>
                         </h2>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <?php
-                        $displayPapers = $resource_type === 'all' ? array_slice($papers, 0, 6) : $papers;
-                        foreach ($displayPapers as $paper):
-                        ?>
+                        <?php foreach (($papers ?? []) as $paper): ?>
                             <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
                                 <div class="border-b border-red-100 bg-gradient-to-br from-white via-red-50 to-red-100 p-5">
                                     <div class="flex items-center justify-between">
@@ -255,6 +256,59 @@
                         <?php endforeach; ?>
                     </div>
 
+                    <?php if (($papersPagination['total_pages'] ?? 0) > 1): ?>
+                        <?php
+                        $paperCurrentPage = (int) ($papersPagination['current_page'] ?? 1);
+                        $paperTotalPages = (int) ($papersPagination['total_pages'] ?? 1);
+                        $paperStartPage = max(1, $paperCurrentPage - 2);
+                        $paperEndPage = min($paperTotalPages, $paperCurrentPage + 2);
+                        $paperQuery = $_GET ?? [];
+                        ?>
+                        <div class="mt-8 rounded-2xl border border-gray-200 bg-white px-4 py-5 shadow-sm">
+                            <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+                                <p class="text-sm text-gray-600">
+                                    Showing <?= $papersPagination['start_item'] ?? 0 ?>-<?= $papersPagination['end_item'] ?? 0 ?> of <?= $paperCount ?> past papers
+                                </p>
+                                <nav class="flex flex-wrap items-center justify-center gap-2" aria-label="Past papers pagination">
+                                    <?php if ($paperCurrentPage > 1): ?>
+                                        <?php $paperPrevQuery = array_merge($paperQuery, ['papers_page' => $paperCurrentPage - 1]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($paperPrevQuery) ?>" class="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-primary hover:text-primary">
+                                            <i class="fas fa-chevron-left mr-2 text-xs"></i>Previous
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if ($paperStartPage > 1): ?>
+                                        <?php $paperFirstQuery = array_merge($paperQuery, ['papers_page' => 1]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($paperFirstQuery) ?>" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-sm font-semibold transition <?= $paperCurrentPage === 1 ? 'border-primary bg-primary text-white' : 'border-gray-300 text-gray-700 hover:border-primary hover:text-primary' ?>">1</a>
+                                        <?php if ($paperStartPage > 2): ?>
+                                            <span class="px-1 text-gray-400">…</span>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+
+                                    <?php for ($page = $paperStartPage; $page <= $paperEndPage; $page++): ?>
+                                        <?php $paperPageQuery = array_merge($paperQuery, ['papers_page' => $page]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($paperPageQuery) ?>" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-sm font-semibold transition <?= $page === $paperCurrentPage ? 'border-primary bg-primary text-white shadow-sm' : 'border-gray-300 text-gray-700 hover:border-primary hover:text-primary' ?>" <?= $page === $paperCurrentPage ? 'aria-current="page"' : '' ?>><?= $page ?></a>
+                                    <?php endfor; ?>
+
+                                    <?php if ($paperEndPage < $paperTotalPages): ?>
+                                        <?php if ($paperEndPage < $paperTotalPages - 1): ?>
+                                            <span class="px-1 text-gray-400">…</span>
+                                        <?php endif; ?>
+                                        <?php $paperLastQuery = array_merge($paperQuery, ['papers_page' => $paperTotalPages]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($paperLastQuery) ?>" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-sm font-semibold transition <?= $paperCurrentPage === $paperTotalPages ? 'border-primary bg-primary text-white' : 'border-gray-300 text-gray-700 hover:border-primary hover:text-primary' ?>"><?= $paperTotalPages ?></a>
+                                    <?php endif; ?>
+
+                                    <?php if ($paperCurrentPage < $paperTotalPages): ?>
+                                        <?php $paperNextQuery = array_merge($paperQuery, ['papers_page' => $paperCurrentPage + 1]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($paperNextQuery) ?>" class="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-primary hover:text-primary">
+                                            Next<i class="fas fa-chevron-right ml-2 text-xs"></i>
+                                        </a>
+                                    <?php endif; ?>
+                                </nav>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if ($resource_type === 'all'): ?>
                         <div class="mt-8 flex justify-center">
                             <a href="<?= site_url('resources?type=papers') ?>" class="inline-flex items-center rounded-full border border-primary bg-white px-6 py-3 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white">
@@ -273,7 +327,7 @@
                             <i class="fas fa-video mr-3 text-primary"></i>
                             Video Solutions
                             <span class="ml-3 rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
-                                <?= count($videos) ?> available
+                                <?= $videoCount ?> available
                             </span>
                         </h2>
                     </div>
@@ -355,10 +409,7 @@
 
                     <!-- Regular Videos Grid -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        <?php
-                        $displayVideos = $resource_type === 'all' ? array_slice($videos, 0, 8) : $videos;
-                        foreach ($displayVideos as $video):
-                        ?>
+                        <?php foreach (($videos ?? []) as $video): ?>
                             <a href="<?= site_url('resources/video/' . $video['id']) ?>" class="group">
                                 <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl">
                                     <div class="relative bg-gradient-to-br from-gray-100 to-gray-200 h-40 flex items-center justify-center overflow-hidden">
@@ -418,6 +469,59 @@
                             </a>
                         <?php endforeach; ?>
                     </div>
+
+                    <?php if (($videosPagination['total_pages'] ?? 0) > 1): ?>
+                        <?php
+                        $videoCurrentPage = (int) ($videosPagination['current_page'] ?? 1);
+                        $videoTotalPages = (int) ($videosPagination['total_pages'] ?? 1);
+                        $videoStartPage = max(1, $videoCurrentPage - 2);
+                        $videoEndPage = min($videoTotalPages, $videoCurrentPage + 2);
+                        $videoQuery = $_GET ?? [];
+                        ?>
+                        <div class="mt-8 rounded-2xl border border-gray-200 bg-white px-4 py-5 shadow-sm">
+                            <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+                                <p class="text-sm text-gray-600">
+                                    Showing <?= $videosPagination['start_item'] ?? 0 ?>-<?= $videosPagination['end_item'] ?? 0 ?> of <?= $videoCount ?> video solutions
+                                </p>
+                                <nav class="flex flex-wrap items-center justify-center gap-2" aria-label="Video solutions pagination">
+                                    <?php if ($videoCurrentPage > 1): ?>
+                                        <?php $videoPrevQuery = array_merge($videoQuery, ['videos_page' => $videoCurrentPage - 1]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($videoPrevQuery) ?>" class="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-secondary hover:text-secondary">
+                                            <i class="fas fa-chevron-left mr-2 text-xs"></i>Previous
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if ($videoStartPage > 1): ?>
+                                        <?php $videoFirstQuery = array_merge($videoQuery, ['videos_page' => 1]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($videoFirstQuery) ?>" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-sm font-semibold transition <?= $videoCurrentPage === 1 ? 'border-secondary bg-secondary text-white' : 'border-gray-300 text-gray-700 hover:border-secondary hover:text-secondary' ?>">1</a>
+                                        <?php if ($videoStartPage > 2): ?>
+                                            <span class="px-1 text-gray-400">…</span>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+
+                                    <?php for ($page = $videoStartPage; $page <= $videoEndPage; $page++): ?>
+                                        <?php $videoPageQuery = array_merge($videoQuery, ['videos_page' => $page]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($videoPageQuery) ?>" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-sm font-semibold transition <?= $page === $videoCurrentPage ? 'border-secondary bg-secondary text-white shadow-sm' : 'border-gray-300 text-gray-700 hover:border-secondary hover:text-secondary' ?>" <?= $page === $videoCurrentPage ? 'aria-current="page"' : '' ?>><?= $page ?></a>
+                                    <?php endfor; ?>
+
+                                    <?php if ($videoEndPage < $videoTotalPages): ?>
+                                        <?php if ($videoEndPage < $videoTotalPages - 1): ?>
+                                            <span class="px-1 text-gray-400">…</span>
+                                        <?php endif; ?>
+                                        <?php $videoLastQuery = array_merge($videoQuery, ['videos_page' => $videoTotalPages]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($videoLastQuery) ?>" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border text-sm font-semibold transition <?= $videoCurrentPage === $videoTotalPages ? 'border-secondary bg-secondary text-white' : 'border-gray-300 text-gray-700 hover:border-secondary hover:text-secondary' ?>"><?= $videoTotalPages ?></a>
+                                    <?php endif; ?>
+
+                                    <?php if ($videoCurrentPage < $videoTotalPages): ?>
+                                        <?php $videoNextQuery = array_merge($videoQuery, ['videos_page' => $videoCurrentPage + 1]); ?>
+                                        <a href="<?= current_url() . '?' . http_build_query($videoNextQuery) ?>" class="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-secondary hover:text-secondary">
+                                            Next<i class="fas fa-chevron-right ml-2 text-xs"></i>
+                                        </a>
+                                    <?php endif; ?>
+                                </nav>
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
                     <?php if ($resource_type === 'all'): ?>
                         <div class="mt-8 flex justify-center">
