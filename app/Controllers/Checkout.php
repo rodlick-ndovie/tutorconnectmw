@@ -524,6 +524,10 @@ class Checkout extends BaseController
                     'message' => 'Webhook endpoint is active and responding correctly'
                 ]);
             }
+
+            // User was redirected back after payment - redirect to return handler for proper UI experience
+            log_message('info', 'PayChangu GET callback: User redirected back - redirecting to return handler for tx_ref: ' . $txRef);
+            return redirect()->to(base_url('trainer/checkout/paychangu/return?tx_ref=' . $txRef));
         }
 
         if (!$txRef) {
