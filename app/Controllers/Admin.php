@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\ParentRequestMatcher;
+use App\Models\ParentRequestModel;
 use App\Models\User;
 use App\Models\TutorModel;
 use App\Models\SiteSettingModel;
@@ -3228,6 +3230,122 @@ info@uprisemw.com | +265 992 313 978";
         return view('admin/contact_messages', $data);
     }
 
+    public function parentRequests()
+    {
+        $this->requireAdminAccess();
+
+        $perPage = 25;
+        $requestModel = new ParentRequestModel();
+        $matcher = new ParentRequestMatcher();
+        $requests = $requestModel->orderBy('created_at', 'DESC')->paginate($perPage);
+        $requestIds = array_map('intval', array_column($requests ?? [], 'id'));
+        $applicationCounts = [];
+
+        if (!empty($requestIds)) {
+            $applicationRows = Database::connect()
+                ->table('parent_request_applications')
+                ->select('parent_request_id, COUNT(*) as total')
+                ->whereIn('parent_request_id', $requestIds)
+                ->groupBy('parent_request_id')
+                ->get()
+                ->getResultArray();
+
+            foreach ($applicationRows as $row) {
+                $applicationCounts[(int) $row['parent_request_id']] = (int) $row['total'];
+            }
+        }
+
+        foreach ($requests as &$request) {
+            $request['subjects'] = $matcher->decodeSubjects($request['subjects_json'] ?? '[]');
+            $request['budget_label'] = $this->formatParentRequestBudget($request);
+            $request['mode_label'] = $this->formatParentRequestMode((string) ($request['mode'] ?? ''));
+            $request['application_count'] = $applicationCounts[(int) $request['id']] ?? 0;
+        }
+        unset($request);
+
+        $db = Database::connect();
+        $totalsRow = $db->table('parent_requests')
+            ->select('COUNT(*) as total_count,
+                      SUM(CASE WHEN status = "open" THEN 1 ELSE 0 END) as open_count,
+                      SUM(matched_tutor_count) as matched_total,
+                      SUM(emailed_tutor_count) as emailed_total')
+            ->get()
+            ->getRowArray();
+
+        $data = [
+            'title' => 'Parent Requests - TutorConnect Malawi',
+            'requests' => $requests,
+            'pager' => $requestModel->pager,
+            'stats' => [
+                'total_count' => (int) ($totalsRow['total_count'] ?? 0),
+                'open_count' => (int) ($totalsRow['open_count'] ?? 0),
+                'matched_total' => (int) ($totalsRow['matched_total'] ?? 0),
+                'emailed_total' => (int) ($totalsRow['emailed_total'] ?? 0),
+                'application_total' => (int) $db->table('parent_request_applications')->countAllResults(),
+            ],
+        ];
+
+        $data = $this->getAdminData($data);
+
+        return view('admin/parent_requests', $data);
+    }
+
+    public function viewParentRequest($id)
+    {
+        $this->requireAdminAccess();
+
+        $request = (new ParentRequestModel())->find((int) $id);
+
+        if (!$request) {
+            throw PageNotFoundException::forPageNotFound();
+        }
+
+        $matcher = new ParentRequestMatcher();
+        $request['subjects'] = $matcher->decodeSubjects($request['subjects_json'] ?? '[]');
+        $request['budget_label'] = $this->formatParentRequestBudget($request);
+        $request['mode_label'] = $this->formatParentRequestMode((string) ($request['mode'] ?? ''));
+
+        $matchedTutors = $matcher->findQualifiedTutors($request);
+        $applications = Database::connect()
+            ->table('parent_request_applications')
+            ->select(
+                'parent_request_applications.*, users.username, users.first_name, users.last_name, '
+                . 'users.email as current_email, users.phone, users.whatsapp_number, users.district, '
+                . 'users.location, users.teaching_mode, users.subscription_plan, '
+                . 'users.subscription_expires_at, users.structured_subjects'
+            )
+            ->join('users', 'users.id = parent_request_applications.tutor_id', 'left')
+            ->where('parent_request_applications.parent_request_id', (int) $request['id'])
+            ->orderBy('parent_request_applications.applied_at', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        $appliedTutorIds = array_flip(array_map('intval', array_column($applications, 'tutor_id')));
+
+        foreach ($matchedTutors as &$tutor) {
+            $tutor['subjects'] = $matcher->tutorSubjectNames($tutor['structured_subjects'] ?? '');
+            $tutor['has_applied'] = isset($appliedTutorIds[(int) $tutor['id']]);
+        }
+        unset($tutor);
+
+        foreach ($applications as &$application) {
+            $application['subjects'] = $matcher->tutorSubjectNames($application['structured_subjects'] ?? '');
+        }
+        unset($application);
+
+        $data = [
+            'title' => 'Parent Request ' . $request['reference_code'] . ' - TutorConnect Malawi',
+            'request' => $request,
+            'matchedTutors' => $matchedTutors,
+            'applications' => $applications,
+            'matchedNowCount' => count($matchedTutors),
+        ];
+
+        $data = $this->getAdminData($data);
+
+        return view('admin/view_parent_request', $data);
+    }
+
     public function japan_applications()
     {
         $this->requireAdminAccess();
@@ -5012,6 +5130,26 @@ info@uprisemw.com | +265 992 313 978";
             'success' => false,
             'message' => 'Failed to delete backup file'
         ]);
+    }
+
+    private function formatParentRequestBudget(array $request): string
+    {
+        $min = (float) ($request['budget_min'] ?? 0);
+        $max = (float) ($request['budget_max'] ?? 0);
+        $period = trim((string) ($request['budget_period'] ?? ''));
+
+        if ($min <= 0 || $max <= 0 || $period === '') {
+            return 'Not set';
+        }
+
+        return 'MWK ' . number_format($min, 0)
+            . ' - ' . number_format($max, 0)
+            . ' per ' . $period;
+    }
+
+    private function formatParentRequestMode(string $mode): string
+    {
+        return strtolower(trim($mode)) === 'physical' ? 'Physical' : 'Online';
     }
 
     private function normalizeMoneyAmount($amount): float

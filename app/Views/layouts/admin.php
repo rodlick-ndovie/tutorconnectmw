@@ -306,6 +306,10 @@
                         <span class="badge-unread"><?php echo $unreadMessageCount; ?></span>
                     <?php endif; ?>
                 </a>
+                <a href="<?php echo base_url('admin/parent-requests'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'parent_requests') ? 'active' : ''; ?>">
+                    <span class="nav-icon"><i class="fas fa-list-check"></i></span>
+                    Parent Requests
+                </a>
                 <a href="<?php echo base_url('admin/japan-applications'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'japan_applications') ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-plane-departure"></i></span>
                     Japan Applications

@@ -67,6 +67,11 @@
                             </button>
                         </div>
                     </div>
+                    <div class="mt-4 text-center">
+                        <a href="<?= site_url('request-teacher') ?>" class="inline-flex items-center justify-center rounded-lg border border-primary px-5 py-2.5 text-sm font-bold text-primary hover:bg-orange-50 transition">
+                            <i class="fas fa-paper-plane mr-2"></i>Post a Teacher Request
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -79,73 +84,68 @@
         $japanApplicationFeeFormatted = number_format((float) $japanApplicationFee, 0);
     ?>
 
-    <section class="bg-white border-b border-gray-100">
-        <!-- Full-width (edge-to-edge) banner -->
-        <div class="w-full bg-gradient-to-r from-primary to-orange-600">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div class="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8 items-center">
-                    <div class="text-white">
-                        <div class="flex flex-wrap items-center gap-3">
-                            <span class="inline-flex items-center rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-red-50 ring-1 ring-white/20">
-                                <?php if ($applicationsOpen): ?>
-                                    <i class="fas fa-plane-departure mr-2"></i>Now Accepting Applications
-                                <?php else: ?>
-                                    <i class="fas fa-circle-xmark mr-2"></i>Applications Closed
-                                <?php endif; ?>
-                            </span>
-                            <span class="text-xs text-white/80">Teach English in Japan</span>
-                        </div>
-
-                        <h2 class="mt-4 text-2xl lg:text-3xl font-extrabold leading-tight">Japan Teaching Opportunity</h2>
-                        <p class="mt-3 text-sm sm:text-base text-red-100 leading-relaxed max-w-2xl">
-                            Any degree. All nationalities welcome. Employer-sponsored visa support available.
-                        </p>
-
-                        <?php if (!$applicationsOpen): ?>
-                            <div class="mt-4 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-red-50 max-w-2xl">
-                                <strong class="text-white">Notice:</strong> <?= esc($applicationsClosedMessage) ?>
-                            </div>
-                        <?php endif; ?>
-
-                        <div class="mt-6 flex flex-col sm:flex-row gap-3">
-                            <a href="<?= site_url('teach-in-japan') ?>" class="inline-flex items-center justify-center px-5 py-2.5 bg-white text-primary font-bold rounded-lg hover:bg-red-50 transition text-sm">
-                                <i class="fas fa-circle-info mr-2"></i>View Details
-                            </a>
-
+    <section class="bg-white border-y border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div class="grid grid-cols-1 lg:grid-cols-[0.92fr_1.08fr] gap-8 items-center">
+                <div class="relative overflow-hidden rounded-lg min-h-[260px] bg-slate-900">
+                    <img src="<?= base_url('assets/japan.jpg') ?>" alt="Japan teaching opportunity" class="absolute inset-0 h-full w-full object-cover">
+                    <div class="absolute inset-0 bg-slate-950/45"></div>
+                    <div class="absolute left-4 top-4">
+                        <span class="inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold <?= $applicationsOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' ?>">
                             <?php if ($applicationsOpen): ?>
-                                <a href="<?= site_url('teach-in-japan/apply') ?>" class="inline-flex items-center justify-center px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold rounded-lg transition border border-red-600 text-sm">
-                                    <i class="fas fa-file-signature mr-2"></i>Apply Now - MK <?= esc($japanApplicationFeeFormatted) ?>
-                                </a>
+                                <i class="fas fa-plane-departure mr-2"></i>Applications Open
                             <?php else: ?>
-                                <a href="<?= site_url('teach-in-japan/status') ?>" class="inline-flex items-center justify-center px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white font-bold rounded-lg transition border border-white/25 text-sm">
-                                    <i class="fas fa-search mr-2"></i>Check Status
-                                </a>
+                                <i class="fas fa-circle-xmark mr-2"></i>Applications Closed
                             <?php endif; ?>
+                        </span>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="text-sm font-semibold text-primary">Teach English in Japan</div>
+                    <h2 class="mt-2 text-3xl lg:text-4xl font-extrabold text-secondary leading-tight">Japan Teaching Applications</h2>
+                    <p class="mt-4 text-gray-600 leading-7 max-w-3xl">
+                        TutorConnect Malawi supports qualified applicants through document review, application access, screening, and placement guidance for English teaching opportunities in Japan.
+                    </p>
+
+                    <?php if (!$applicationsOpen): ?>
+                        <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            <strong>Notice:</strong> <?= esc($applicationsClosedMessage) ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <div class="text-xs font-semibold text-gray-500">Expected Pay</div>
+                            <div class="mt-1 text-xl font-extrabold text-secondary">JPY 225,000</div>
+                            <div class="mt-1 text-xs text-gray-500">Entry-level monthly pay</div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <div class="text-xs font-semibold text-gray-500">Requirement</div>
+                            <div class="mt-1 text-xl font-extrabold text-secondary">Any Degree</div>
+                            <div class="mt-1 text-xs text-gray-500">Completed qualification</div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <div class="text-xs font-semibold text-gray-500">Application Fee</div>
+                            <div class="mt-1 text-xl font-extrabold text-secondary">MK <?= esc($japanApplicationFeeFormatted) ?></div>
+                            <div class="mt-1 text-xs text-gray-500">PayChangu access</div>
                         </div>
                     </div>
 
-                    <!-- Compact KPIs (small + professional) -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="rounded-xl bg-white/95 border border-white/20 p-4">
-                            <div class="text-[11px] font-semibold text-primary uppercase tracking-wide">Salary</div>
-                            <div class="mt-1 text-xl font-extrabold text-secondary">JPY 225,000</div>
-                            <div class="mt-0.5 text-xs text-gray-600">Entry-level monthly pay</div>
-                        </div>
-                        <div class="rounded-xl bg-white/95 border border-white/20 p-4">
-                            <div class="text-[11px] font-semibold text-primary uppercase tracking-wide">Equivalent</div>
-                            <div class="mt-1 text-xl font-extrabold text-secondary">~MK 2.5M</div>
-                            <div class="mt-0.5 text-xs text-gray-600">Per month in MWK</div>
-                        </div>
-                        <div class="rounded-xl bg-white/95 border border-white/20 p-4">
-                            <div class="text-[11px] font-semibold text-primary uppercase tracking-wide">Age</div>
-                            <div class="mt-1 text-xl font-extrabold text-secondary">20-40</div>
-                            <div class="mt-0.5 text-xs text-gray-600">Requirement</div>
-                        </div>
-                        <div class="rounded-xl bg-white/95 border border-white/20 p-4">
-                            <div class="text-[11px] font-semibold text-primary uppercase tracking-wide">Degree</div>
-                            <div class="mt-1 text-xl font-extrabold text-secondary">Any</div>
-                            <div class="mt-0.5 text-xs text-gray-600">Field accepted</div>
-                        </div>
+                    <div class="mt-6 flex flex-col sm:flex-row gap-3">
+                        <a href="<?= site_url('teach-in-japan') ?>" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-secondary hover:border-primary hover:text-primary transition">
+                            <i class="fas fa-circle-info mr-2"></i>View Details
+                        </a>
+
+                        <?php if ($applicationsOpen): ?>
+                            <a href="<?= site_url('teach-in-japan/apply') ?>" class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-red-600 transition">
+                                <i class="fas fa-file-signature mr-2"></i>Apply Now
+                            </a>
+                        <?php else: ?>
+                            <a href="<?= site_url('teach-in-japan/status') ?>" class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-red-600 transition">
+                                <i class="fas fa-search mr-2"></i>Check Status
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -805,103 +805,91 @@
         </div>
     </section>
 
-    <!-- School Notices Scrolling Banner -->
-    <section class="py-12 bg-gradient-to-r from-primary to-red-600 overflow-hidden">
+    <!-- School Notices Section -->
+    <section class="py-14 bg-slate-50 border-y border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center">
-                    <i class="fas fa-bullhorn text-3xl text-white mr-3"></i>
-                    <h2 class="text-2xl font-bold text-white">School Notices & Announcements</h2>
+            <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-8">
+                <div class="max-w-3xl">
+                    <div class="text-sm font-semibold text-primary">Education Notice Board</div>
+                    <h2 class="mt-2 text-3xl lg:text-4xl font-extrabold text-secondary">Latest School Notices</h2>
+                    <p class="mt-3 text-gray-600 leading-7">
+                        Vacancies, school announcements, events, and updates from schools across Malawi.
+                    </p>
                 </div>
-                <a href="<?= site_url('notice/create') ?>"
-                   class="px-4 py-2 bg-white text-primary rounded-lg font-semibold hover:bg-red-50 transition text-sm">
-                    <i class="fas fa-plus mr-2"></i>Post Notice
-                </a>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <a href="<?= site_url('notice') ?>" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-secondary hover:border-primary hover:text-primary transition">
+                        View All Notices
+                    </a>
+                    <a href="<?= site_url('notice/create') ?>" class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-red-600 transition">
+                        <i class="fas fa-plus mr-2"></i>Post Notice
+                    </a>
+                </div>
             </div>
 
             <?php
-            // Get recent approved notices for scrolling display
             $noticeModel = new \App\Models\NoticeModel();
             $recentNotices = $noticeModel->getRecentNotices(10);
+            $displayNotices = array_slice($recentNotices, 0, 3);
             ?>
 
-            <?php if (!empty($recentNotices)): ?>
-                <div class="relative">
-                    <div class="notice-scroll-container overflow-x-hidden overflow-y-visible">
-                        <div class="notice-scroll-wrapper flex gap-6">
-                            <?php foreach ($recentNotices as $notice): ?>
-                                <div class="notice-card flex-shrink-0 w-96 bg-white rounded-xl shadow-lg p-6">
-                                    <div class="flex items-start justify-between mb-3">
-                                        <span class="inline-block px-3 py-1 text-xs font-semibold rounded-full
-                                            <?= $notice['notice_type'] == 'Vacancy' ? 'bg-green-100 text-green-800' :
-                                                ($notice['notice_type'] == 'Announcement' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800') ?>">
-                                            <?= esc($notice['notice_type']) ?>
-                                        </span>
-                                        <span class="text-xs text-gray-500">
-                                            <i class="far fa-clock mr-1"></i>
-                                            <?= date('M d, Y', strtotime($notice['approved_at'])) ?>
-                                        </span>
-                                    </div>
+            <?php if (!empty($displayNotices)): ?>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <?php foreach ($displayNotices as $notice): ?>
+                        <article class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden flex flex-col">
+                            <?php if (!empty($notice['attached_image'])): ?>
+                                <img src="<?= base_url($notice['attached_image']) ?>"
+                                     alt="<?= esc($notice['notice_title']) ?>"
+                                     class="w-full h-40 object-cover">
+                            <?php else: ?>
+                                <div class="h-2 bg-primary"></div>
+                            <?php endif; ?>
 
-                                    <h3 class="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
-                                        <?= esc($notice['notice_title']) ?>
-                                    </h3>
-
-                                    <div class="flex items-center text-sm text-gray-700 mb-3">
-                                        <i class="fas fa-school text-primary mr-2"></i>
-                                        <span class="font-semibold"><?= esc($notice['school_name']) ?></span>
-                                    </div>
-
-                                    <p class="text-sm text-gray-600 mb-4 line-clamp-3">
-                                        <?= esc(substr($notice['notice_content'], 0, 150)) ?>...
-                                    </p>
-
-                                    <?php if (!empty($notice['attached_image'])): ?>
-                                        <div class="mb-3">
-                                            <img src="<?= base_url($notice['attached_image']) ?>"
-                                             alt="Notice image"
-                                             class="w-full h-32 object-cover rounded-lg">
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <div class="flex items-center justify-between pt-3 border-t">
-                                        <div class="text-xs text-gray-500">
-                                            <i class="fas fa-phone mr-1"></i><?= esc($notice['phone']) ?>
-                                        </div>
-                                        <a href="<?= site_url('notice/view/' . $notice['id']) ?>"
-                                           class="text-primary hover:text-red-600 font-semibold text-sm">
-                                            Read More <i class="fas fa-arrow-right ml-1"></i>
-                                        </a>
-                                    </div>
+                            <div class="p-5 flex flex-col flex-grow">
+                                <div class="flex items-center justify-between gap-3 mb-4">
+                                    <span class="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold
+                                        <?= $notice['notice_type'] == 'Vacancy' ? 'bg-emerald-100 text-emerald-800' :
+                                            ($notice['notice_type'] == 'Announcement' ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800') ?>">
+                                        <?= esc($notice['notice_type']) ?>
+                                    </span>
+                                    <span class="text-xs text-gray-500 whitespace-nowrap">
+                                        <i class="far fa-clock mr-1"></i>
+                                        <?= date('M d, Y', strtotime($notice['approved_at'])) ?>
+                                    </span>
                                 </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
 
-                    <!-- Navigation Arrows for Speed Control -->
-                    <button onclick="boostScroll('left')"
-                            class="absolute left-0 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-primary rounded-full p-3 shadow-lg z-10 transition hover:scale-110">
-                        <i class="fas fa-chevron-left text-lg"></i>
-                    </button>
-                    <button onclick="boostScroll('right')"
-                            class="absolute right-0 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-primary rounded-full p-3 shadow-lg z-10 transition hover:scale-110">
-                        <i class="fas fa-chevron-right text-lg"></i>
-                    </button>
-                </div>
+                                <h3 class="text-lg font-extrabold text-gray-900 leading-snug line-clamp-2">
+                                    <?= esc($notice['notice_title']) ?>
+                                </h3>
 
-                <div class="text-center mt-6">
-                    <a href="<?= site_url('notice') ?>"
-                       class="inline-block px-6 py-2.5 bg-white text-primary rounded-lg font-semibold hover:bg-red-50 transition">
-                        View All Notices <i class="fas fa-arrow-right ml-2"></i>
-                    </a>
+                                <div class="mt-3 flex items-center text-sm text-gray-700">
+                                    <i class="fas fa-school text-primary mr-2"></i>
+                                    <span class="font-semibold line-clamp-1"><?= esc($notice['school_name']) ?></span>
+                                </div>
+
+                                <p class="mt-3 text-sm text-gray-600 leading-6 line-clamp-3">
+                                    <?= esc(substr($notice['notice_content'], 0, 150)) ?><?= strlen($notice['notice_content']) > 150 ? '...' : '' ?>
+                                </p>
+
+                                <div class="mt-auto flex items-center justify-between gap-3 pt-5">
+                                    <div class="text-xs text-gray-500">
+                                        <i class="fas fa-eye mr-1"></i><?= number_format((int) ($notice['views_count'] ?? 0)) ?> views
+                                    </div>
+                                    <a href="<?= site_url('notice/view/' . $notice['id']) ?>" class="text-primary hover:text-red-600 font-bold text-sm">
+                                        Read More <i class="fas fa-arrow-right ml-1"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <div class="bg-white rounded-xl shadow-lg p-12 text-center">
-                    <i class="fas fa-bullhorn text-6xl text-gray-300 mb-4"></i>
-                    <h3 class="text-xl font-semibold text-gray-700 mb-2">No Notices Yet</h3>
-                    <p class="text-gray-500 mb-4">Be the first to post a school notice or announcement</p>
-                    <a href="<?= site_url('notice/create') ?>"
-                       class="inline-block px-6 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-red-700 transition">
+                <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-10 text-center">
+                    <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
+                        <i class="fas fa-bullhorn text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">No Notices Yet</h3>
+                    <p class="text-gray-500 mb-5">Be the first to post a school notice or announcement.</p>
+                    <a href="<?= site_url('notice/create') ?>" class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-red-600 transition">
                         <i class="fas fa-plus mr-2"></i>Post Your First Notice
                     </a>
                 </div>
@@ -909,82 +897,26 @@
         </div>
 
         <style>
-            .notice-scroll-container {
-                overflow-x: hidden;
-                position: relative;
+            .line-clamp-1,
+            .line-clamp-2,
+            .line-clamp-3 {
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
             }
 
-            .notice-scroll-wrapper {
-                animation: scroll-notices 15s linear infinite;
-                will-change: transform;
-                display: flex;
-            }
-
-            .notice-scroll-wrapper.speed-boost {
-                animation: scroll-notices 6s linear infinite;
-            }
-
-            .notice-scroll-container:hover .notice-scroll-wrapper {
-                animation-play-state: paused;
-            }
-
-            @keyframes scroll-notices {
-                0% {
-                    transform: translateX(0);
-                }
-                100% {
-                    transform: translateX(calc(-50% - 1.5rem));
-                }
-            }
-
-            .notice-scroll-wrapper {
-                animation: scroll-notices 15s linear infinite;
-            }
-
-            .notice-scroll-wrapper.speed-boost {
-                animation: scroll-notices 6s linear infinite;
+            .line-clamp-1 {
+                -webkit-line-clamp: 1;
             }
 
             .line-clamp-2 {
-                display: -webkit-box;
                 -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
             }
 
             .line-clamp-3 {
-                display: -webkit-box;
                 -webkit-line-clamp: 3;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
             }
         </style>
-
-        <script>
-            // Duplicate items for seamless loop
-            document.addEventListener('DOMContentLoaded', function() {
-                const wrapper = document.querySelector('.notice-scroll-wrapper');
-                if (wrapper) {
-                    const items = Array.from(wrapper.querySelectorAll('.notice-card'));
-                    items.forEach(item => {
-                        wrapper.appendChild(item.cloneNode(true));
-                    });
-                }
-            });
-
-            function boostScroll(direction) {
-                const wrapper = document.querySelector('.notice-scroll-wrapper');
-                const container = document.querySelector('.notice-scroll-container');
-                if (!wrapper) return;
-
-                const scrollAmount = 400;
-                if (direction === 'left') {
-                    container.scrollLeft -= scrollAmount;
-                } else {
-                    container.scrollLeft += scrollAmount;
-                }
-            }
-        </script>
     </section>
 
 </div>

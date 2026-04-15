@@ -262,40 +262,51 @@
 </head>
 <body class="bg-neutral font-sans">
     <!-- Navigation -->
-    <nav class="bg-white shadow-lg sticky top-0 z-50">
+    <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0 flex items-center">
+            <div class="flex justify-between h-14 items-center gap-4">
+                <a href="<?= site_url('/') ?>" class="flex items-center min-w-0" aria-label="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?> home">
+                    <div class="flex-shrink-0 flex items-center min-w-0">
                         <?php $siteLogo = site_setting('site_logo', ''); ?>
                         <?php if (!empty($siteLogo)): ?>
-                            <img src="<?= esc(base_url('uploads/' . $siteLogo)) ?>" alt="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?>" class="h-16 w-auto" />
+                            <img src="<?= esc(base_url('uploads/' . $siteLogo)) ?>" alt="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?>" class="h-10 max-w-[170px] w-auto object-contain" />
                         <?php else: ?>
-                            <i class="fas fa-graduation-cap text-2xl text-primary"></i>
-                            <span class="ml-2 text-xl font-bold text-secondary"><?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?></span>
+                            <i class="fas fa-graduation-cap text-xl text-primary"></i>
+                            <span class="ml-2 text-lg font-bold text-secondary truncate"><?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?></span>
                         <?php endif; ?>
+                    </div>
+                </a>
+
+                <!-- Desktop Menu -->
+                <div class="hidden lg:flex lg:items-center lg:justify-end lg:gap-1 flex-1">
+                    <a href="<?= site_url('/') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Home</a>
+                    <a href="<?= site_url('resources') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Resources</a>
+                    <a href="<?= site_url('teach-in-japan') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Teach in Japan</a>
+                    <!--<a href="<?= site_url('how-it-works') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">How It Works</a>-->
+                    <a href="<?= site_url('pricing') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Pricing</a>
+                    <a href="<?= site_url('notice') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Notices</a>
+                    <a href="<?= site_url('find-tutors') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Find Teachers</a>
+
+                    <div class="ml-3 flex items-center gap-2 border-l border-gray-200 pl-3">
+                        <a href="<?= site_url('request-teacher') ?>" class="inline-flex items-center rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
+                            Request Teacher
+                        </a>
+                        <a href="<?= site_url('login') ?>" class="inline-flex items-center rounded-md border border-gray-300 px-3.5 py-2 text-sm font-semibold text-secondary hover:border-primary hover:text-primary transition-colors">
+                            <i class="fas fa-sign-in-alt mr-1.5 text-xs"></i> Login
+                        </a>
                     </div>
                 </div>
 
-                <!-- Desktop Menu -->
-                <div class="hidden md:flex md:items-center md:space-x-8">
-                    <a href="<?= site_url('/') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">Home</a>
-                    <a href="<?= site_url('resources') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">Resources</a>
-                    <a href="<?= site_url('teach-in-japan') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">Teach in Japan</a>
-                    <!--<a href="<?= site_url('how-it-works') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">How It Works</a>-->
-                    <a href="<?= site_url('pricing') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">Pricing</a>
-                    <a href="<?= site_url('notice') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">Notices</a>
-                    <a href="<?= site_url('find-tutors') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">Find Teachers</a>
-
-                    <a href="<?= site_url('login') ?>" class="text-primary hover:text-red-600 px-3 py-2 font-medium flex items-center">
-                        <i class="fas fa-sign-in-alt mr-1"></i> Login
+                <div class="hidden md:flex lg:hidden items-center gap-2">
+                    <a href="<?= site_url('request-teacher') ?>" class="inline-flex items-center rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
+                        Request Teacher
                     </a>
                 </div>
 
                 <!-- Mobile Menu Toggle Button -->
-                <div class="md:hidden">
-                    <button onclick="toggleOffcanvas()" class="text-secondary hover:text-primary transition-colors p-2">
-                        <i class="fas fa-bars text-2xl"></i>
+                <div class="lg:hidden">
+                    <button onclick="toggleOffcanvas()" class="text-secondary hover:text-primary hover:bg-gray-100 transition-colors p-2 rounded-md" aria-label="Open menu">
+                        <i class="fas fa-bars text-xl"></i>
                     </button>
                 </div>
             </div>
@@ -303,27 +314,27 @@
     </nav>
 
     <!-- Off-Canvas Mobile Menu (Full Page) -->
-    <div id="offcanvasBackdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 md:hidden transition-opacity duration-300" onclick="toggleOffcanvas()"></div>
+    <div id="offcanvasBackdrop" class="hidden fixed inset-0 bg-black bg-opacity-70 z-40 lg:hidden transition-opacity duration-300" onclick="toggleOffcanvas()"></div>
 
-    <div id="offcanvasMenu" class="fixed inset-0 bg-white transform -translate-x-full transition-transform duration-300 z-50 md:hidden overflow-y-auto">
+    <div id="offcanvasMenu" class="fixed inset-0 bg-white transform -translate-x-full transition-transform duration-300 z-50 lg:hidden overflow-y-auto">
         <!-- Off-Canvas Header -->
-        <div class="bg-white text-secondary p-6 flex items-center justify-between sticky top-0 border-b border-slate-200 shadow-sm">
-            <div class="flex items-center">
+        <div class="bg-white text-secondary px-5 py-4 flex items-center justify-between sticky top-0 border-b border-slate-200 shadow-sm">
+            <div class="flex items-center min-w-0">
                 <?php $siteLogo = site_setting('site_logo', ''); ?>
                 <?php if (!empty($siteLogo)): ?>
-                    <img src="<?= esc(base_url('uploads/' . $siteLogo)) ?>" alt="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?>" class="h-14 w-auto" />
+                    <img src="<?= esc(base_url('uploads/' . $siteLogo)) ?>" alt="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?>" class="h-10 max-w-[170px] w-auto object-contain" />
                 <?php else: ?>
-                    <i class="fas fa-graduation-cap text-2xl"></i>
-                    <span class="ml-2 text-lg font-bold"><?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?></span>
+                    <i class="fas fa-graduation-cap text-xl"></i>
+                    <span class="ml-2 text-lg font-bold truncate"><?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?></span>
                 <?php endif; ?>
             </div>
-            <button onclick="toggleOffcanvas()" class="text-secondary hover:bg-slate-100 p-2 rounded-lg transition">
-                <i class="fas fa-times text-2xl"></i>
+            <button onclick="toggleOffcanvas()" class="text-secondary hover:bg-slate-100 p-2 rounded-md transition" aria-label="Close menu">
+                <i class="fas fa-times text-xl"></i>
             </button>
         </div>
 
         <!-- Off-Canvas Menu Items -->
-        <div class="flex flex-col items-center justify-center min-h-[calc(100vh-88px)] p-8 space-y-3">
+        <div class="flex flex-col items-center justify-center min-h-[calc(100vh-73px)] p-8 space-y-3">
             <a href="<?= site_url('/') ?>" onclick="toggleOffcanvas()" class="w-full max-w-xs px-4 py-2.5 text-secondary hover:bg-slate-50 hover:text-primary rounded-lg font-medium transition-all duration-200 flex items-center justify-center border border-slate-200">
                 <i class="fas fa-home mr-2 text-sm text-slate-600"></i>
                 <span class="text-sm">Home</span>
@@ -351,6 +362,10 @@
             <a href="<?= site_url('find-tutors') ?>" onclick="toggleOffcanvas()" class="w-full max-w-xs px-4 py-2.5 text-secondary hover:bg-slate-50 hover:text-primary rounded-lg font-medium transition-all duration-200 flex items-center justify-center border border-slate-200">
                 <i class="fas fa-search mr-2 text-sm text-slate-600"></i>
                 <span class="text-sm">Find Teachers</span>
+            </a>
+            <a href="<?= site_url('request-teacher') ?>" onclick="toggleOffcanvas()" class="w-full max-w-xs px-4 py-2.5 text-secondary hover:bg-slate-50 hover:text-primary rounded-lg font-medium transition-all duration-200 flex items-center justify-center border border-slate-200">
+                <i class="fas fa-paper-plane mr-2 text-sm text-slate-600"></i>
+                <span class="text-sm">Request Teacher</span>
             </a>
 
             <!-- Divider -->
@@ -390,7 +405,7 @@
                     <div class="flex items-center mb-4">
                         <?php $siteLogo = site_setting('site_logo', ''); ?>
                         <?php if (!empty($siteLogo)): ?>
-                            <img src="<?= esc(base_url('uploads/' . $siteLogo)) ?>" alt="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?>" class="h-14 w-auto" />
+                            <img src="<?= esc(base_url('uploads/' . $siteLogo)) ?>" alt="<?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?>" class="h-10 max-w-[170px] w-auto object-contain" />
                         <?php else: ?>
                             <i class="fas fa-graduation-cap text-2xl text-primary"></i>
                             <span class="ml-2 text-xl font-bold text-gray-900"><?= esc(site_setting('site_name', 'TutorConnect Malawi')) ?></span>
@@ -429,6 +444,7 @@
                         <li><a href="<?= site_url('resources/video-solutions') ?>" class="text-gray-600 hover:text-primary">Video Solutions</a></li>
                         <li><a href="<?= site_url('teach-in-japan') ?>" class="text-gray-600 hover:text-primary">Teach in Japan</a></li>
                         <li><a href="<?= site_url('find-tutors') ?>" class="text-gray-600 hover:text-primary">Find Teachers</a></li>
+                        <li><a href="<?= site_url('request-teacher') ?>" class="text-gray-600 hover:text-primary">Request Teacher</a></li>
                         <li><a href="<?= site_url('pricing') ?>" class="text-gray-600 hover:text-primary">Pricing</a></li>
                     </ul>
                 </div>

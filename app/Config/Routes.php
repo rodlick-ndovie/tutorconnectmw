@@ -70,6 +70,10 @@ $routes->get('/', 'Home::index');
 $routes->get('how-it-works', 'Home::howItWorks');
 $routes->get('pricing', 'Home::pricing');
 $routes->get('find-tutors', 'Home::findTutors');
+$routes->get('request-teacher', 'ParentRequests::index');
+$routes->post('request-teacher', 'ParentRequests::store');
+$routes->get('request-teacher/success/(:segment)', 'ParentRequests::success/$1');
+$routes->get('parent-requests/apply/(:segment)', 'ParentRequests::apply/$1');
 $routes->get('tutor/(:any)', 'Home::tutorProfile/$1');
 $routes->get('login', 'Home::login');
 $routes->post('login', 'Auth::attemptLogin');
@@ -289,6 +293,8 @@ $routes->group('admin', ['filter' => 'auth'], static function ($routes) {
 
     // Contact message management
     $routes->get('contact-messages', 'Admin::contact_messages');
+    $routes->get('parent-requests', 'Admin::parentRequests');
+    $routes->get('parent-requests/(:num)', 'Admin::viewParentRequest/$1');
     $routes->get('japan-applications', 'Admin::japan_applications');
     $routes->get('japan-payments', 'Admin::japan_payments');
     $routes->get('past-paper-payments', 'Admin::pastPaperPayments');

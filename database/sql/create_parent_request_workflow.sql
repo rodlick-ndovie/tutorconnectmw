@@ -1,0 +1,42 @@
+CREATE TABLE IF NOT EXISTS `parent_requests` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `reference_code` varchar(30) COLLATE utf8mb4_general_ci NOT NULL,
+  `curriculum` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `grade_class` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `subjects_json` text COLLATE utf8mb4_general_ci NOT NULL,
+  `district` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `specific_location` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `mode` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `budget_min` decimal(12,2) NOT NULL,
+  `budget_max` decimal(12,2) NOT NULL,
+  `budget_period` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `notes` text COLLATE utf8mb4_general_ci,
+  `parent_phone` varchar(30) COLLATE utf8mb4_general_ci NOT NULL,
+  `parent_email` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'open',
+  `matched_tutor_count` int unsigned NOT NULL DEFAULT 0,
+  `emailed_tutor_count` int unsigned NOT NULL DEFAULT 0,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `reference_code` (`reference_code`),
+  KEY `curriculum` (`curriculum`),
+  KEY `district` (`district`),
+  KEY `mode` (`mode`),
+  KEY `status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `parent_request_applications` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `parent_request_id` int unsigned NOT NULL,
+  `tutor_id` int unsigned NOT NULL,
+  `tutor_email` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'applied',
+  `applied_at` datetime DEFAULT NULL,
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `parent_request_tutor` (`parent_request_id`, `tutor_id`),
+  KEY `tutor_id` (`tutor_id`),
+  KEY `status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
