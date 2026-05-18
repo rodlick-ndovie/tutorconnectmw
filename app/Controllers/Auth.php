@@ -92,6 +92,25 @@ class Auth extends BaseController
         ";
     }
 
+    private function verificationSecret(): string
+    {
+        $key = (string) (config('Encryption')->key ?? '');
+
+        return $key !== '' ? $key : (string) (getenv('app.baseURL') ?: FCPATH);
+    }
+
+    private function makeVerificationToken(string $email, string $otpCode, string $otpExpiresAt): string
+    {
+        return hash_hmac('sha256', strtolower(trim($email)) . '|' . $otpCode . '|' . $otpExpiresAt, $this->verificationSecret());
+    }
+
+    private function buildVerificationLink(string $email, string $otpCode, string $otpExpiresAt): string
+    {
+        $token = $this->makeVerificationToken($email, $otpCode, $otpExpiresAt);
+
+        return base_url('verify-email?email=' . rawurlencode($email) . '&token=' . rawurlencode($token));
+    }
+
     public function __construct()
     {
         $this->userModel = new User();
@@ -302,8 +321,12 @@ class Auth extends BaseController
                 $emailService->setSubject($this->getSiteSetting('company_name', 'TutorConnect Malawi') . ' - Email Verification');
                 $emailService->setMailType('html');
 
-                // Create verification link
-                $verificationLink = 'http://localhost/tutorconnectmw/verify-email?email=' . urlencode($completeData['email']) . '&code=' . $userData['otp_code'];
+                // Create one-click verification link (tokenized, no OTP in URL)
+                $verificationLink = $this->buildVerificationLink(
+                    $completeData['email'],
+                    (string) $userData['otp_code'],
+                    (string) $userData['otp_expires_at']
+                );
 
                 $content = "
                     <h2>Welcome to " . $this->getSiteSetting('company_name', 'TutorConnect Malawi') . ", {$completeData['first_name']}!</h2>
@@ -506,6 +529,7 @@ class Auth extends BaseController
     {
         $email = $this->request->getGet('email');
         $code = $this->request->getGet('code');
+        $token = $this->request->getGet('token');
 
         if (!$email) {
             return redirect()->to('/register')->with('error', 'Email parameter is required');
@@ -521,7 +545,108 @@ class Auth extends BaseController
             return redirect()->to('/login')->with('success', 'Email already verified. Please login.');
         }
 
-        // If code is provided in URL, auto-verify
+        // If token is provided in URL, auto-verify without requiring OTP entry.
+        if ($token) {
+            if (empty($user['otp_code']) || empty($user['otp_expires_at'])) {
+                return redirect()->to('verify-email?email=' . urlencode($email))
+                    ->with('error', 'Verification token is no longer valid. Please request a new code.');
+            }
+
+            if (strtotime((string) $user['otp_expires_at']) < time()) {
+                return redirect()->to('verify-email?email=' . urlencode($email))
+                    ->with('error', 'Verification link has expired. Please request a new one.');
+            }
+
+            $expectedToken = $this->makeVerificationToken(
+                (string) $user['email'],
+                (string) $user['otp_code'],
+                (string) $user['otp_expires_at']
+            );
+
+            if (!hash_equals($expectedToken, (string) $token)) {
+                return redirect()->to('verify-email?email=' . urlencode($email))
+                    ->with('error', 'Invalid verification link.');
+            }
+
+            // Update user as verified
+            $this->userModel->update($user['id'], [
+                'is_verified' => 1,
+                'is_active' => 1,
+                'email_verified_at' => date('Y-m-d H:i:s'),
+                'otp_code' => null,
+                'otp_expires_at' => null
+            ]);
+
+            log_message('info', 'Email verified via token link for user: ' . $email);
+
+            // Send welcome email (professional HTML template)
+            try {
+                $emailService = \Config\Services::email();
+                $emailService->setFrom($this->getSiteSetting('contact_email', 'info@tutorconnectmw.com'), $this->getSiteSetting('company_name', 'TutorConnect Malawi'));
+                $emailService->setTo($user['email']);
+                $emailService->setSubject($this->getSiteSetting('company_name', 'TutorConnect Malawi') . ' - Welcome!');
+                $emailService->setMailType('html');
+
+                $content = "
+                    <h2>Welcome to " . $this->getSiteSetting('company_name', 'TutorConnect Malawi') . ", {$user['first_name']}!</h2>
+
+                    <p>Congratulations! Your email has been successfully verified and your tutor account is now fully activated.</p>
+
+                    <div class='highlight'>
+                        <h3 style='margin-top: 0; color: #2C3E50;'>🎉 Your Account is Ready!</h3>
+                        <p>You now have full access to our platform. Here's what you can do to get started:</p>
+                    </div>
+
+                    <h3 style='color: #2C3E50;'>Next Steps:</h3>
+                    <ul style='color: #555;'>
+                        <li><strong>Complete Your Profile:</strong> Add your bio, qualifications, and teaching experience</li>
+                        <li><strong>Upload Documents:</strong> Submit your ID, certificates, and clearances for verification</li>
+                        <li><strong>Set Availability:</strong> Define your teaching subjects, rates, and available times</li>
+                        <li><strong>Start Teaching:</strong> Connect with students and begin your tutoring journey</li>
+                    </ul>
+
+                    <div style='text-align: center; margin: 30px 0;'>
+                        <a href='" . base_url('trainer/dashboard/complete-profile') . "' class='btn'>Complete Your Profile</a>
+                    </div>
+
+                    <div style='background: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;'>
+                        <h4 style='margin-top: 0; color: #2C3E50;'>💡 Pro Tip</h4>
+                        <p style='margin-bottom: 0; color: #666;'>Tutors with complete profiles and verified documents get 10x more student inquiries!</p>
+                    </div>
+
+                    <p>Need help getting started? Our support team is here to assist you.</p>
+
+                    <div style='text-align: center; margin: 30px 0;'>
+                        <a href='" . base_url('login') . "' class='btn'>Login to Your Account</a>
+                    </div>
+                ";
+
+                $emailService->setMessage($this->generateEmailTemplate($content, $this->getSiteSetting('company_name', 'TutorConnect Malawi') . ' - Welcome!'));
+
+                log_message('info', 'About to send welcome email to: ' . $user['email']);
+                $sendResult = $emailService->send(false);
+                log_message('info', 'Welcome email send() result: ' . ($sendResult ? 'true' : 'false'));
+
+                if ($sendResult) {
+                    log_message('info', 'Welcome email sent successfully to: ' . $user['email']);
+                } else {
+                    log_message('error', 'Failed to send welcome email to: ' . $user['email']);
+                    $debugInfo = $emailService->printDebugger(['headers', 'subject', 'body']);
+                    log_message('error', 'Email debug info: ' . $debugInfo);
+                }
+            } catch (\Exception $emailException) {
+                log_message('error', 'Welcome email exception: ' . $emailException->getMessage());
+                log_message('error', 'Email trace: ' . $emailException->getTraceAsString());
+            }
+
+            // Clear any old session messages before setting the new verification success message
+            session()->remove('success');
+            session()->remove('error');
+
+            return redirect()->to('/login')->with('success', 'Email verified successfully! You can now login to complete your profile.');
+        }
+
+        // Backward compatibility: if code is provided in URL, auto-verify.
         if ($code) {
             // Check if OTP is valid and not expired
             if ($user['otp_code'] != $code) {
@@ -825,6 +950,12 @@ class Auth extends BaseController
                 $emailService->setSubject($this->getSiteSetting('company_name', 'TutorConnect Malawi') . ' - New Verification Code');
                 $emailService->setMailType('html');
 
+                $verificationLink = $this->buildVerificationLink(
+                    (string) $user['email'],
+                    (string) $newOtp,
+                    (string) $expiresAt
+                );
+
                 $content = "
                     <h2>New Verification Code</h2>
 
@@ -837,6 +968,15 @@ class Auth extends BaseController
                         <div class='code'>{$newOtp}</div>
                         <p style='margin: 10px 0 0 0; font-size: 14px; color: #666;'>Valid for 15 minutes</p>
                     </div>
+
+                    <div style='text-align: center; margin: 30px 0;'>
+                        <a href='{$verificationLink}' class='btn'>Verify My Email</a>
+                    </div>
+
+                    <p style='text-align: center; color: #666; font-size: 14px;'>
+                        Or copy and paste this link: <br>
+                        <a href='{$verificationLink}' style='color: #E55C0D; word-break: break-all;'>{$verificationLink}</a>
+                    </p>
 
                     <p>If you didn't request this code, please ignore this email.</p>
 

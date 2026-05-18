@@ -132,6 +132,9 @@
             <p class="text-center text-muted mb-3">
                 Code sent to <strong><?php echo htmlspecialchars($email ?? 'your email'); ?></strong>
             </p>
+            <p class="text-center text-muted mb-3">
+                You can also verify instantly by clicking the button link in the email.
+            </p>
 
             <div id="alertMessage"></div>
 
@@ -141,12 +144,12 @@
                 <input type="hidden" name="otp" id="otp" value="">
 
                 <div class="otp-container">
-                    <input type="text" maxlength="1" class="otp-input" id="d1">
-                    <input type="text" maxlength="1" class="otp-input" id="d2">
-                    <input type="text" maxlength="1" class="otp-input" id="d3">
-                    <input type="text" maxlength="1" class="otp-input" id="d4">
-                    <input type="text" maxlength="1" class="otp-input" id="d5">
-                    <input type="text" maxlength="1" class="otp-input" id="d6">
+                    <input type="text" maxlength="1" class="otp-input" id="d1" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+                    <input type="text" maxlength="1" class="otp-input" id="d2" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+                    <input type="text" maxlength="1" class="otp-input" id="d3" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+                    <input type="text" maxlength="1" class="otp-input" id="d4" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+                    <input type="text" maxlength="1" class="otp-input" id="d5" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+                    <input type="text" maxlength="1" class="otp-input" id="d6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
                 </div>
 
                 <button type="submit" class="btn btn-primary" id="submitBtn">
@@ -180,11 +183,39 @@
     const btnText = document.getElementById('submitBtnText');
     const spinner = document.getElementById('submitSpinner');
     const alertDiv = document.getElementById('alertMessage');
+    const emailValue = (form.querySelector('input[name="email"]')?.value || '').toLowerCase();
+    const otpStorageKey = `verifyOtpDraft:${emailValue}`;
+
+    function saveOtpDraft() {
+        if (!emailValue) return;
+        localStorage.setItem(otpStorageKey, otpField.value);
+    }
+
+    function clearOtpDraft() {
+        if (!emailValue) return;
+        localStorage.removeItem(otpStorageKey);
+    }
+
+    function restoreOtpDraft() {
+        if (!emailValue) return;
+        const draft = (localStorage.getItem(otpStorageKey) || '').replace(/\D/g, '').slice(0, 6);
+        if (!draft) return;
+
+        inputs.forEach((input, index) => {
+            input.value = draft[index] || '';
+        });
+        updateOTP();
+
+        const firstEmpty = Array.from(inputs).find(input => !input.value);
+        (firstEmpty || inputs[5]).focus();
+    }
 
     inputs.forEach((input, i) => {
         input.addEventListener('input', () => {
+            input.value = (input.value || '').replace(/\D/g, '');
             if (input.value.length === 1 && i < 5) inputs[i + 1].focus();
             updateOTP();
+            saveOtpDraft();
             if (otpField.value.length === 6) setTimeout(() => form.dispatchEvent(new Event('submit')), 300);
         });
         input.addEventListener('keydown', e => {
@@ -212,6 +243,7 @@
         .then(r => r.json())
         .then(d => {
             if (d.success) {
+                clearOtpDraft();
                 alertDiv.innerHTML = `<div class="alert alert-success small p-2 mt-3 rounded">Email verified! Redirecting...</div>`;
                 setTimeout(() => location.href = d.redirect || "<?= base_url('login') ?>", 2000);
             } else {
@@ -243,8 +275,15 @@
         });
     }
 
-    // Auto-focus first digit
-    document.getElementById('d1').focus();
+    window.addEventListener('pageshow', restoreOtpDraft);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            restoreOtpDraft();
+        }
+    });
+
+    restoreOtpDraft();
+    if (!otpField.value) document.getElementById('d1').focus();
 </script>
 </body>
 </html>

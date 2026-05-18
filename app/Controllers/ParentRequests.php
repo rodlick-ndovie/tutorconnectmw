@@ -372,6 +372,8 @@ class ParentRequests extends BaseController
         $subjects = implode(', ', $this->decodeSubjects($request['subjects_json'] ?? '[]'));
         $notes = trim((string) ($request['notes'] ?? ''));
         $companyName = $this->companyName();
+        $parentPhone = trim((string) ($request['parent_phone'] ?? ''));
+        $parentEmail = trim((string) ($request['parent_email'] ?? ''));
 
         return '<!DOCTYPE html>
 <html lang="en">
@@ -396,6 +398,8 @@ class ParentRequests extends BaseController
                 <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;">Location</td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">' . esc($request['district'] . ', ' . $request['specific_location']) . '</td></tr>
                 <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;">Mode</td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">' . esc($this->formatMode((string) $request['mode'])) . '</td></tr>
                 <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;">Budget</td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">' . esc($this->formatBudget($request)) . '</td></tr>
+                <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;">Parent phone</td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">' . esc($parentPhone !== '' ? $parentPhone : 'Not provided') . '</td></tr>
+                <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;">Parent email</td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">' . esc($parentEmail !== '' ? $parentEmail : 'Not provided') . '</td></tr>
             </table>
             ' . ($notes !== '' ? '<div style="background:#fff7ed;border:1px solid #fed7aa;padding:14px;margin:18px 0;"><strong>Notes:</strong><br>' . nl2br(esc($notes)) . '</div>' : '') . '
             <p>If this is a good fit, click below. The parent will receive your TutorConnect profile and registered contact details.</p>
@@ -411,6 +415,8 @@ class ParentRequests extends BaseController
     {
         $applyUrl = $this->buildApplyUrl((int) $request['id'], (int) $tutor['id'], (string) $request['reference_code']);
         $subjects = implode(', ', $this->decodeSubjects($request['subjects_json'] ?? '[]'));
+        $parentPhone = trim((string) ($request['parent_phone'] ?? ''));
+        $parentEmail = trim((string) ($request['parent_email'] ?? ''));
 
         return "New matching parent request\n\n"
             . "Reference: {$request['reference_code']}\n"
@@ -420,6 +426,8 @@ class ParentRequests extends BaseController
             . "Location: {$request['district']}, {$request['specific_location']}\n"
             . "Mode: " . $this->formatMode((string) $request['mode']) . "\n"
             . "Budget: " . $this->formatBudget($request) . "\n"
+            . 'Parent phone: ' . ($parentPhone !== '' ? $parentPhone : 'Not provided') . "\n"
+            . 'Parent email: ' . ($parentEmail !== '' ? $parentEmail : 'Not provided') . "\n"
             . "Notes: " . trim((string) ($request['notes'] ?? '')) . "\n\n"
             . "Apply for this request: {$applyUrl}\n\n"
             . "You received this because your active paid subscription, subjects, and teaching preferences match this request.";
@@ -432,9 +440,16 @@ class ParentRequests extends BaseController
             $email = \Config\Services::email();
             $companyName = $this->companyName();
             $profileUrl = site_url('tutor/' . (!empty($tutor['username']) ? $tutor['username'] : $tutor['id']));
+            $tutorName = trim(($tutor['first_name'] ?? '') . ' ' . ($tutor['last_name'] ?? ''));
+            $tutorEmail = trim((string) ($tutor['email'] ?? ''));
+            $tutorPhone = trim((string) ($tutor['phone'] ?? ''));
+            $tutorWhatsapp = trim((string) ($tutor['whatsapp_number'] ?? ''));
+            $tutorLocation = trim((string) ($tutor['district'] ?? '') . ', ' . (string) ($tutor['location'] ?? ''), ', ');
+            $parentPhone = trim((string) ($request['parent_phone'] ?? ''));
+            $parentEmail = trim((string) ($request['parent_email'] ?? ''));
 
             $email->setFrom($emailConfig->fromEmail, $emailConfig->fromName);
-            $email->setReplyTo($tutor['email'], trim(($tutor['first_name'] ?? '') . ' ' . ($tutor['last_name'] ?? '')));
+            $email->setReplyTo($tutorEmail, $tutorName);
             $email->setTo($request['parent_email']);
             $email->setSubject('A teacher applied for your request - ' . $request['reference_code']);
 
@@ -450,11 +465,16 @@ class ParentRequests extends BaseController
         <div style="padding:24px;">
             <p>A verified teacher has applied for your request <strong>' . esc($request['reference_code']) . '</strong>.</p>
             <div style="background:#f9fafb;border:1px solid #e5e7eb;padding:16px;margin:18px 0;">
-                <p><strong>Name:</strong> ' . esc(trim(($tutor['first_name'] ?? '') . ' ' . ($tutor['last_name'] ?? ''))) . '</p>
-                <p><strong>Email:</strong> ' . esc($tutor['email']) . '</p>
-                <p><strong>Phone:</strong> ' . esc($tutor['phone'] ?? 'Not provided') . '</p>
-                <p><strong>WhatsApp:</strong> ' . esc($tutor['whatsapp_number'] ?? 'Not provided') . '</p>
-                <p><strong>Location:</strong> ' . esc(trim(($tutor['district'] ?? '') . ', ' . ($tutor['location'] ?? ''), ', ')) . '</p>
+                <p><strong>Name:</strong> ' . esc($tutorName !== '' ? $tutorName : 'Not provided') . '</p>
+                <p><strong>Email:</strong> ' . esc($tutorEmail !== '' ? $tutorEmail : 'Not provided') . '</p>
+                <p><strong>Phone:</strong> ' . esc($tutorPhone !== '' ? $tutorPhone : 'Not provided') . '</p>
+                <p><strong>WhatsApp:</strong> ' . esc($tutorWhatsapp !== '' ? $tutorWhatsapp : 'Not provided') . '</p>
+                <p><strong>Location:</strong> ' . esc($tutorLocation !== '' ? $tutorLocation : 'Not provided') . '</p>
+            </div>
+            <div style="background:#fff7ed;border:1px solid #fed7aa;padding:16px;margin:18px 0;">
+                <p><strong>Your submitted contact (for confirmation)</strong></p>
+                <p><strong>Phone:</strong> ' . esc($parentPhone !== '' ? $parentPhone : 'Not provided') . '</p>
+                <p><strong>Email:</strong> ' . esc($parentEmail !== '' ? $parentEmail : 'Not provided') . '</p>
             </div>
             <p style="margin:24px 0;"><a href="' . esc($profileUrl) . '" style="background:#E55C0D;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:bold;">View teacher profile</a></p>
         </div>
@@ -463,10 +483,14 @@ class ParentRequests extends BaseController
 </html>';
 
             $text = "A verified teacher applied for your request {$request['reference_code']}.\n\n"
-                . 'Name: ' . trim(($tutor['first_name'] ?? '') . ' ' . ($tutor['last_name'] ?? '')) . "\n"
-                . 'Email: ' . ($tutor['email'] ?? '') . "\n"
-                . 'Phone: ' . ($tutor['phone'] ?? 'Not provided') . "\n"
-                . 'WhatsApp: ' . ($tutor['whatsapp_number'] ?? 'Not provided') . "\n"
+                . 'Name: ' . ($tutorName !== '' ? $tutorName : 'Not provided') . "\n"
+                . 'Email: ' . ($tutorEmail !== '' ? $tutorEmail : 'Not provided') . "\n"
+                . 'Phone: ' . ($tutorPhone !== '' ? $tutorPhone : 'Not provided') . "\n"
+                . 'WhatsApp: ' . ($tutorWhatsapp !== '' ? $tutorWhatsapp : 'Not provided') . "\n"
+                . 'Location: ' . ($tutorLocation !== '' ? $tutorLocation : 'Not provided') . "\n"
+                . "\nYour submitted contact:\n"
+                . 'Phone: ' . ($parentPhone !== '' ? $parentPhone : 'Not provided') . "\n"
+                . 'Email: ' . ($parentEmail !== '' ? $parentEmail : 'Not provided') . "\n"
                 . 'Profile: ' . $profileUrl . "\n";
 
             $email->setMessage($html);
