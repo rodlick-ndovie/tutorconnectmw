@@ -68,8 +68,8 @@
                         </div>
                     </div>
                     <div class="mt-4 text-center">
-                        <a href="<?= site_url('request-teacher') ?>" class="inline-flex items-center justify-center rounded-lg border border-primary px-5 py-2.5 text-sm font-bold text-primary hover:bg-orange-50 transition">
-                            <i class="fas fa-paper-plane mr-2"></i>Post a Teacher Request
+                        <a href="<?= site_url('request-tutor') ?>" class="inline-flex items-center justify-center rounded-lg border border-primary px-5 py-2.5 text-sm font-bold text-primary hover:bg-orange-50 transition">
+                            <i class="fas fa-paper-plane mr-2"></i>Post a Tutor Request
                         </a>
                     </div>
                 </div>
@@ -182,7 +182,7 @@
                             </li>
                             <li class="flex items-center">
                                 <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>Contact with students</span>
+                                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Academic Specialist</p>
                             </li>
                             <li class="flex items-center">
                                 <i class="fas fa-check text-green-500 mr-3"></i>
@@ -476,6 +476,117 @@
                     View All Teachers <i class="fas fa-chevron-right ml-2"></i>
                 </a>
             </div>
+        </div>
+    </section>
+
+    <!-- University Tutors Section -->
+    <section class="py-16 bg-white border-t border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="max-w-3xl mb-10">
+                <div>
+                    <h2 class="text-3xl md:text-4xl font-bold text-secondary leading-tight">Approved specialists for university-level academic support</h2>
+                    <p class="mt-4 text-slate-600 leading-7 max-w-3xl">
+                        Work with reviewed academic professionals for research guidance, ICT, mathematics, accounting, statistics, dissertation planning, and exam preparation.
+                    </p>
+                </div>
+            </div>
+
+            <?php if (!empty($university_tutors)): ?>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <?php foreach ($university_tutors as $uniTutor): ?>
+                        <?php
+                            $institutions = $uniTutor['institutions_list'] ?? [];
+                            $serviceAreas = $uniTutor['service_areas_list'] ?? [];
+                            $displayName = trim((string) ($uniTutor['full_name'] ?? ''));
+                            $displayName = $displayName !== '' ? $displayName : 'University Tutor';
+                            $profilePicture = trim((string) ($uniTutor['profile_picture'] ?? ''));
+                            $initials = strtoupper(substr($displayName, 0, 1));
+                            $visibleServices = array_slice($serviceAreas, 0, 3);
+                            $remainingServices = max(0, count($serviceAreas) - count($visibleServices));
+                        ?>
+                        <article class="h-full bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
+                            <div class="p-5 h-full flex flex-col">
+                                <div class="flex items-start gap-4 mb-5">
+                                    <div class="w-16 h-16 rounded-lg overflow-hidden bg-orange-50 flex items-center justify-center border border-orange-100 text-primary font-bold text-xl flex-shrink-0">
+                                        <?php if ($profilePicture !== ''): ?>
+                                            <img src="<?= base_url($profilePicture) ?>" alt="<?= esc($displayName) ?>" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                            <div class="w-full h-full hidden items-center justify-center"><?= esc($initials) ?></div>
+                                        <?php else: ?>
+                                            <?= esc($initials) ?>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="text-lg font-semibold text-slate-900 leading-snug"><?= esc($displayName) ?></h3>
+                                        <p class="mt-1 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                            <i class="fas fa-circle-check mr-1.5"></i>Approved specialist
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="grid gap-3 text-sm text-slate-600 mb-5">
+                                    <div class="flex items-start gap-2">
+                                        <i class="fas fa-map-marker-alt text-primary mt-1 w-4"></i>
+                                        <span class="leading-6"><?= esc($uniTutor['city_location'] ?? 'Location not specified') ?></span>
+                                    </div>
+                                    <div class="flex items-start gap-2">
+                                        <i class="fas fa-laptop text-primary mt-1 w-4"></i>
+                                        <span class="leading-6"><?= esc($uniTutor['teaching_mode'] ?? 'Mode not specified') ?></span>
+                                    </div>
+                                    <div class="flex items-start gap-2">
+                                        <i class="fas fa-graduation-cap text-primary mt-1 w-4"></i>
+                                        <span class="leading-6"><?= esc(!empty($institutions) ? implode(', ', array_slice($institutions, 0, 2)) : 'Institution not listed') ?></span>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2 mb-5">
+                                    <?php if (!empty($serviceAreas)): ?>
+                                        <?php foreach ($visibleServices as $serviceArea): ?>
+                                            <span class="inline-flex items-center rounded-md bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1.5 leading-snug"><?= esc($serviceArea) ?></span>
+                                        <?php endforeach; ?>
+                                        <?php if ($remainingServices > 0): ?>
+                                            <span class="inline-flex items-center rounded-md bg-orange-50 text-primary text-xs font-semibold px-2.5 py-1.5">+<?= $remainingServices ?> more</span>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="inline-flex items-center rounded-md bg-slate-100 text-slate-600 text-xs font-medium px-2.5 py-1.5">Academic Support</span>
+                                    <?php endif; ?>
+                                </div>
+
+                                <a href="<?= site_url('university-tutor/' . (int) ($uniTutor['id'] ?? 0)) ?>" class="mt-auto inline-flex items-center justify-center w-full rounded-md bg-secondary text-white text-sm font-semibold px-4 py-2.5 hover:bg-primary transition">
+                                    View Academic Profile <i class="fas fa-arrow-right ml-2"></i>
+                                </a>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+                    <a href="<?= site_url('university-college-support') ?>" class="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-secondary hover:border-primary hover:text-primary transition">
+                        <i class="fas fa-circle-info mr-2"></i>Explore University Support
+                    </a>
+                    <a href="<?= site_url('request-tutor?type=university') ?>" class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition">
+                        <i class="fas fa-calendar-check mr-2"></i>Request Academic Support
+                    </a>
+                </div>
+            <?php else: ?>
+                <div class="rounded-lg border border-orange-100 bg-orange-50/60 p-8 lg:p-10">
+                    <div class="max-w-3xl mx-auto text-center">
+                        <div class="w-16 h-16 bg-white rounded-lg flex items-center justify-center mx-auto mb-5 border border-orange-100 text-primary">
+                            <i class="fas fa-user-shield text-2xl"></i>
+                        </div>
+                        <h3 class="text-2xl font-extrabold text-slate-900">Approved university tutor profiles are being prepared</h3>
+                        <p class="mt-3 text-slate-700 leading-7">
+                            We only publish university and college specialists after profile verification, document review, and subscription activation. You can still submit your academic support request, and our team will route it to suitable approved tutors as they become available.
+                        </p>
+                        <div class="mt-6 flex flex-col sm:flex-row justify-center gap-3">
+                            <a href="<?= site_url('request-tutor?type=university') ?>" class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-red-600 transition">
+                                <i class="fas fa-calendar-check mr-2"></i>Request Academic Support
+                            </a>
+                            <a href="<?= site_url('university-college-support/register') ?>" class="inline-flex items-center justify-center rounded-md border border-primary bg-white px-5 py-2.5 text-sm font-bold text-primary hover:bg-primary hover:text-white transition">
+                                <i class="fas fa-user-graduate mr-2"></i>Register as a Specialist
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
     </section>
 

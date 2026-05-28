@@ -1,18 +1,30 @@
 <?= $this->extend('layouts/admin') ?>
 
 <?php $active_page = 'subscriptions'; ?>
-<?php $title = $title ?? 'Subscription Plans Management - TutorConnect Malawi'; ?>
+<?php
+$title = $title ?? 'Subscription Plans Management - TutorConnect Malawi';
+$portalType = $portal_type ?? 'trainer';
+$portalLabel = $portal_label ?? 'Tutors';
+$plansUrl = $plans_url ?? site_url('admin/subscriptions');
+$addPlanUrl = $add_plan_url ?? site_url('admin/subscriptions/add');
+$editPlanBaseUrl = $edit_plan_base_url ?? site_url('admin/subscriptions/edit/');
+$deletePlanBaseUrl = $delete_plan_base_url ?? site_url('admin/subscriptions/delete/');
+$otherPlansUrl = $other_plans_url ?? site_url('admin/university-subscriptions');
+$otherPortalLabel = $other_portal_label ?? 'University Plans';
+?>
 
 <?= $this->section('content') ?>
     <!-- Header -->
     <div class="header-bar">
         <div>
-            <h1 class="page-title">Subscription Plans Management</h1>
-            <p class="page-subtitle">Manage subscription plans available to tutors</p>
+            <h1 class="page-title"><?= esc($portalLabel) ?> Subscription Plans</h1>
+            <p class="page-subtitle">Manage plans assigned only to <?= esc(strtolower($portalLabel)) ?>.</p>
         </div>
-        <a href="<?= site_url('admin/subscriptions/add') ?>" class="btn-admin">
-            <i class="fas fa-plus me-2"></i>Add New Plan
-        </a>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="<?= esc($addPlanUrl) ?>" class="btn-admin">
+                <i class="fas fa-plus me-2"></i>Add <?= esc($portalLabel) ?> Plan
+            </a>
+        </div>
     </div>
 
     <!-- Stats Grid -->
@@ -21,11 +33,11 @@
             <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6, #1e40af);">
                 <i class="fas fa-dollar-sign"></i>
             </div>
-            <div class="stat-number"><?php echo number_format($total_plans); ?></div>
-            <div class="stat-label">Total Plans</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+        <div class="stat-number"><?php echo number_format($total_plans); ?></div>
+        <div class="stat-label">Total Plans</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
                 <i class="fas fa-check-circle"></i>
             </div>
             <div class="stat-number"><?php echo number_format($active_plans); ?></div>
@@ -35,17 +47,79 @@
             <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
                 <i class="fas fa-pause-circle"></i>
             </div>
-            <div class="stat-number"><?php echo number_format($total_plans - $active_plans); ?></div>
-            <div class="stat-label">Inactive Plans</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);">
-                <i class="fas fa-money-bill-wave"></i>
-            </div>
-            <div class="stat-number">MK <?php echo number_format($stats['total_revenue_potential']); ?></div>
-            <div class="stat-label">Monthly Revenue</div>
-        </div>
+        <div class="stat-number"><?php echo number_format($total_plans - $active_plans); ?></div>
+        <div class="stat-label">Inactive Plans</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+            <i class="fas fa-chalkboard-teacher"></i>
+        </div>
+        <div class="stat-number"><?php echo number_format($portalType === 'university' ? ($stats['university_active_subscribers'] ?? 0) : ($stats['regular_active_subscribers'] ?? 0)); ?></div>
+        <div class="stat-label"><?= $portalType === 'university' ? 'Active University Plans' : 'Active Tutor Plans' ?></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #0f766e, #115e59);">
+            <i class="fas fa-money-bill-wave"></i>
+        </div>
+        <div class="stat-number">MK <?php echo number_format($stats['total_revenue_potential']); ?></div>
+        <div class="stat-label">Monthly Revenue</div>
+    </div>
+</div>
+
+    <?php if ($portalType === 'university'): ?>
+        <div class="content-card mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="m-0">University Users</h5>
+                <span class="badge bg-info text-dark"><?= number_format(count($university_users ?? [])) ?> users</span>
+            </div>
+
+            <?php if (!empty($university_users)): ?>
+                <div class="table-responsive">
+                    <table class="table table-bordered" width="100%" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Reference Code</th>
+                                <th>Status</th>
+                                <th>Current Plan</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach (($university_users ?? []) as $user): ?>
+                                <tr>
+                                    <td><?= esc($user['full_name'] ?: 'N/A') ?></td>
+                                    <td>
+                                        <?php if (!empty($user['email'])): ?>
+                                            <a href="mailto:<?= esc($user['email']) ?>"><?= esc($user['email']) ?></a>
+                                        <?php else: ?>
+                                            <span class="text-muted">N/A</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= esc($user['reference_code'] ?: 'N/A') ?></td>
+                                    <td>
+                                        <?php $status = strtolower((string) ($user['status'] ?? 'pending_review')); ?>
+                                        <span class="badge <?= $status === 'approved' ? 'bg-success' : ($status === 'rejected' ? 'bg-danger' : 'bg-warning text-dark') ?>">
+                                            <?= esc(ucwords(str_replace('_', ' ', $status))) ?>
+                                        </span>
+                                    </td>
+                                    <td><?= esc($user['subscription_plan'] ?: 'No active plan') ?></td>
+                                    <td>
+                                        <a href="<?= site_url('admin/view-university-college-tutor/' . (int) ($user['id'] ?? 0)) ?>" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <div class="alert alert-info mb-0">No university users found yet.</div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 
     <!-- Content Card -->
     <div class="content-card">
@@ -55,7 +129,7 @@
         <div class="col-12">
             <div class="card shadow">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Subscription Plans</h6>
+                    <h6 class="m-0 font-weight-bold text-primary"><?= esc($portalLabel) ?> Subscription Plans</h6>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -67,6 +141,7 @@
                                     <th>Price (MWK)</th>
                                     <th>Limits</th>
                                     <th>Features</th>
+                                    <th>Usage</th>
                                     <th>Status</th>
                                     <th>Sort Order</th>
                                     <th>Actions</th>
@@ -117,6 +192,20 @@
                                             </small>
                                         </td>
                                         <td>
+                                            <?php if (($plan['total_subscriptions'] ?? 0) > 0): ?>
+                                                <div class="d-grid gap-1">
+                                                    <span class="badge bg-dark">Active: <?= number_format($plan['active_subscriptions'] ?? 0) ?></span>
+                                                    <?php if ($portalType === 'university'): ?>
+                                                        <span class="badge bg-info text-dark">University: <?= number_format($plan['university_active_subscriptions'] ?? 0) ?> active / <?= number_format($plan['university_subscriptions'] ?? 0) ?> total</span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-primary">Tutors: <?= number_format($plan['regular_active_subscriptions'] ?? 0) ?> active / <?= number_format($plan['regular_subscriptions'] ?? 0) ?> total</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <em class="text-muted">No subscriptions yet</em>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
                                             <?php if ($plan['is_active']): ?>
                                                 <span class="badge bg-success">Active</span>
                                             <?php else: ?>
@@ -127,10 +216,10 @@
                                             <?= $plan['sort_order'] ?>
                                         </td>
                                         <td>
-                                            <a href="<?= site_url('admin/subscriptions/edit/' . $plan['id']) ?>" class="btn btn-sm btn-primary me-1" title="Edit">
+                                            <a href="<?= esc($editPlanBaseUrl . $plan['id']) ?>" class="btn btn-sm btn-primary me-1" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </a>
-                                            <form method="POST" action="<?= site_url('admin/subscriptions/delete/' . $plan['id']) ?>" class="d-inline"
+                                            <form method="POST" action="<?= esc($deletePlanBaseUrl . $plan['id']) ?>" class="d-inline"
                                                   onsubmit="return confirm('Are you sure you want to delete this plan?')">
                                                 <?= csrf_field() ?>
                                                 <button type="submit" class="btn btn-sm btn-danger" title="Delete">
@@ -436,9 +525,10 @@
                 <h5 class="modal-title" id="createPlanModalLabel">Create New Subscription Plan</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" id="planForm" action="<?= site_url('admin/subscriptions/create') ?>">
+            <form method="POST" id="planForm" action="<?= esc($portalType === 'university' ? site_url('admin/university-subscriptions/create') : site_url('admin/subscriptions/create')) ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" id="plan_id" name="plan_id" value="">
+                <input type="hidden" name="portal_type" value="<?= esc($portalType) ?>">
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6">
@@ -654,7 +744,7 @@ function editPlan(planId) {
                 // Change modal title and form action
                 document.getElementById('createPlanModalLabel').textContent = 'Edit Subscription Plan';
                 const form = document.getElementById('createPlanModal').querySelector('form');
-                form.action = '<?= site_url('admin/subscriptions/update/') ?>' + planId;
+                form.action = '<?= esc($portalType === 'university' ? site_url('admin/university-subscriptions/update/') : site_url('admin/subscriptions/update/')) ?>' + planId;
                 form.method = 'POST';
 
                 // Change submit button text
@@ -689,7 +779,7 @@ $('#createPlanModal').on('hidden.bs.modal', function () {
     // Reset form action and title
     document.getElementById('createPlanModalLabel').textContent = 'Create New Subscription Plan';
     const form = document.getElementById('createPlanModal').querySelector('form');
-    form.action = '<?= site_url('admin/subscriptions/create') ?>';
+    form.action = '<?= esc($portalType === 'university' ? site_url('admin/university-subscriptions/create') : site_url('admin/subscriptions/create')) ?>';
     form.method = 'POST';
 
     // Reset submit button text
@@ -714,7 +804,7 @@ $('#createPlanModal').on('hidden.bs.modal', function () {
 $(document).ready(function() {
     if ($.fn.DataTable) {
         $('#plansTable').DataTable({
-            "order": [[6, 'asc']], // Sort by sort order
+            "order": [[8, 'asc']], // Sort by sort order
             "pageLength": 10
         });
     }

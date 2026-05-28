@@ -1244,7 +1244,7 @@ info@tutorconnectmw.com | +265 992 313 978";
         log_message('debug', 'User: ' . print_r($user, true));
 
         // Get all active plans - explicitly select all fields
-        $available_plans = $this->subscriptionPlanModel->select('*')->where('is_active', 1)->orderBy('sort_order', 'ASC')->findAll();
+        $available_plans = $this->subscriptionPlanModel->getActivePlansForPortal('trainer');
         log_message('debug', 'Available plans: ' . print_r($available_plans, true));
 
         // Debug: Check features field for each plan
@@ -1262,6 +1262,7 @@ info@tutorconnectmw.com | +265 992 313 978";
             'user' => $user,
             'available_plans' => $available_plans,
             'current_subscription' => $current_subscription,
+            'max_billing_months' => $this->tutorSubscriptionModel->getMaxBillingMonths(),
         ];
 
         log_message('debug', 'Subscription view data: ' . print_r($data, true));

@@ -1,24 +1,32 @@
 <?= $this->extend('layouts/admin') ?>
 
 <?php $active_page = 'subscriptions'; ?>
-<?php $title = $title ?? 'Add Subscription Plan - TutorConnect Malawi'; ?>
+<?php
+$title = $title ?? 'Add Subscription Plan - TutorConnect Malawi';
+$portalType = $portal_type ?? 'trainer';
+$isUniversity = $portalType === 'university';
+$portalLabel = $portal_label ?? 'Tutors';
+$plansUrl = $plans_url ?? site_url('admin/subscriptions');
+$createPlanUrl = $create_plan_url ?? site_url('admin/subscriptions/create');
+?>
 
 <?= $this->section('content') ?>
     <!-- Header -->
     <div class="header-bar">
         <div>
-            <h1 class="page-title">Add New Subscription Plan</h1>
-            <p class="page-subtitle">Create a new subscription plan for tutors</p>
+            <h1 class="page-title">Add <?= esc($portalLabel) ?> Subscription Plan</h1>
+            <p class="page-subtitle">Create a plan available only to <?= esc(strtolower($portalLabel)) ?>.</p>
         </div>
-        <a href="<?= site_url('admin/subscriptions') ?>" class="btn-admin btn-secondary">
+        <a href="<?= esc($plansUrl) ?>" class="btn-admin btn-secondary">
             <i class="fas fa-arrow-left me-2"></i>Back to Plans
         </a>
     </div>
 
     <!-- Form Card -->
     <div class="content-card">
-        <form method="POST" action="<?= site_url('admin/subscriptions/create') ?>" id="planForm">
+        <form method="POST" action="<?= esc($createPlanUrl) ?>" id="planForm">
             <?= csrf_field() ?>
+            <input type="hidden" name="portal_type" value="<?= esc($portalType) ?>">
 
             <div class="row">
                 <div class="col-md-8">
@@ -59,13 +67,17 @@
                                         <div class="form-text">Lower numbers appear first in the list</div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="district_spotlight_days" class="form-label">District Spotlight Days</label>
-                                        <input type="number" class="form-control" id="district_spotlight_days" name="district_spotlight_days" min="0" value="0">
-                                        <div class="form-text">Number of days for district spotlight feature</div>
+                                <?php if (!$isUniversity): ?>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="district_spotlight_days" class="form-label">District Spotlight Days</label>
+                                            <input type="number" class="form-control" id="district_spotlight_days" name="district_spotlight_days" min="0" value="0">
+                                            <div class="form-text">Number of days for district spotlight feature</div>
+                                        </div>
                                     </div>
-                                </div>
+                                <?php else: ?>
+                                    <input type="hidden" name="district_spotlight_days" value="0">
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -76,102 +88,205 @@
                             <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Limits & Features</h5>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="max_profile_views" class="form-label">Max Profile Views <span class="text-danger">*</span></label>
-                                        <input type="number" class="form-control" id="max_profile_views" name="max_profile_views" min="0" required>
-                                        <div class="form-text">Enter 0 for unlimited</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="max_clicks" class="form-label">Max Contact Clicks <span class="text-danger">*</span></label>
-                                        <input type="number" class="form-control" id="max_clicks" name="max_clicks" min="0" required>
-                                        <div class="form-text">Enter 0 for unlimited</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="max_subjects" class="form-label">Max Subjects <span class="text-danger">*</span></label>
-                                        <input type="number" class="form-control" id="max_subjects" name="max_subjects" min="0" required>
-                                        <div class="form-text">Enter 0 for unlimited</div>
-                                    </div>
-                                </div>
-                            </div>
+                            <?php if ($isUniversity): ?>
+                                <input type="hidden" id="max_profile_views" name="max_profile_views" value="0">
+                                <input type="hidden" id="max_clicks" name="max_clicks" value="0">
+                                <input type="hidden" id="max_subjects" name="max_subjects" value="0">
+                                <input type="hidden" name="badge_level" value="none">
+                                <input type="hidden" name="search_ranking" value="low">
 
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="badge_level" class="form-label">Badge Level</label>
-                                        <select class="form-control" name="badge_level" id="badge_level">
-                                            <option value="none">None</option>
-                                            <option value="trial">Trial</option>
-                                            <option value="verified">Verified</option>
-                                            <option value="featured">Featured</option>
-                                            <option value="top_rated">Top Rated</option>
-                                        </select>
-                                    </div>
+                                <div class="alert alert-info">
+                                    <i class="fas fa-circle-info me-2"></i>
+                                    University plans use simplified limits. Feature checks below are still active and will be applied.
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="search_ranking" class="form-label">Search Ranking</label>
-                                        <select class="form-control" name="search_ranking" id="search_ranking">
-                                            <option value="low">Low</option>
-                                            <option value="normal">Normal</option>
-                                            <option value="priority">Priority</option>
-                                            <option value="top">Top</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <!-- Features -->
-                            <div class="mb-3">
-                                <label class="form-label">Features & Permissions</label>
+                                <div class="mb-3">
+                                    <label class="form-label">Applied Limits</label>
+                                    <div class="small text-muted">
+                                        <strong>Limits:</strong><br>
+                                        • Profile Views: Unlimited<br>
+                                        • Contact Clicks: Unlimited
+                                    </div>
+                                </div>
+
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="checkbox" id="show_whatsapp" name="show_whatsapp" value="1">
-                                            <label class="form-check-label" for="show_whatsapp">
-                                                <i class="fab fa-whatsapp me-1 text-success"></i>Show WhatsApp contact
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="checkbox" id="email_marketing_access" name="email_marketing_access" value="1">
-                                            <label class="form-check-label" for="email_marketing_access">
-                                                <i class="fas fa-envelope me-1 text-info"></i>Email marketing access
-                                            </label>
+                                        <div class="mb-3">
+                                            <label for="custom_included_features" class="form-label">What's Included</label>
+                                            <textarea class="form-control" id="custom_included_features" name="custom_included_features" rows="6" placeholder="One included item per line"></textarea>
+                                            <div class="form-text">Displayed on the university portal plan cards.</div>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="checkbox" id="allow_video_upload" name="allow_video_upload" value="1">
-                                            <label class="form-check-label" for="allow_video_upload">
-                                                <i class="fas fa-video me-1 text-warning"></i>Allow video uploads
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="checkbox" id="allow_pdf_upload" name="allow_pdf_upload" value="1">
-                                            <label class="form-check-label" for="allow_pdf_upload">
-                                                <i class="fas fa-file-pdf me-1 text-danger"></i>Allow PDF uploads
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="checkbox" id="allow_video_solution" name="allow_video_solution" value="1">
-                                            <label class="form-check-label" for="allow_video_solution">
-                                                <i class="fas fa-play-circle me-1 text-primary"></i>Allow video solutions
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="checkbox" id="allow_announcements" name="allow_announcements" value="1">
-                                            <label class="form-check-label" for="allow_announcements">
-                                                <i class="fas fa-bullhorn me-1 text-secondary"></i>Allow announcements
-                                            </label>
+                                        <div class="mb-3">
+                                            <label for="custom_not_included_features" class="form-label">What's Not Included</label>
+                                            <textarea class="form-control" id="custom_not_included_features" name="custom_not_included_features" rows="6" placeholder="One excluded item per line"></textarea>
+                                            <div class="form-text">Optional. Leave blank when not needed.</div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">University Feature Checks</label>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="show_whatsapp" name="show_whatsapp" value="1">
+                                                <label class="form-check-label" for="show_whatsapp">
+                                                    <i class="fab fa-whatsapp me-1 text-success"></i>Show WhatsApp contact
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="email_marketing_access" name="email_marketing_access" value="1">
+                                                <label class="form-check-label" for="email_marketing_access">
+                                                    <i class="fas fa-envelope me-1 text-info"></i>Email marketing access
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="allow_announcements" name="allow_announcements" value="1">
+                                                <label class="form-check-label" for="allow_announcements">
+                                                    <i class="fas fa-bullhorn me-1 text-secondary"></i>Allow announcements
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="allow_video_upload" name="allow_video_upload" value="1">
+                                                <label class="form-check-label" for="allow_video_upload">
+                                                    <i class="fas fa-video me-1 text-warning"></i>Allow video uploads
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="allow_pdf_upload" name="allow_pdf_upload" value="1">
+                                                <label class="form-check-label" for="allow_pdf_upload">
+                                                    <i class="fas fa-file-pdf me-1 text-danger"></i>Allow PDF uploads
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="allow_video_solution" name="allow_video_solution" value="1">
+                                                <label class="form-check-label" for="allow_video_solution">
+                                                    <i class="fas fa-play-circle me-1 text-primary"></i>Allow video solutions
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="max_profile_views" class="form-label">Max Profile Views <span class="text-danger">*</span></label>
+                                            <input type="number" class="form-control" id="max_profile_views" name="max_profile_views" min="0" required>
+                                            <div class="form-text">Enter 0 for unlimited</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="max_clicks" class="form-label">Max Contact Clicks <span class="text-danger">*</span></label>
+                                            <input type="number" class="form-control" id="max_clicks" name="max_clicks" min="0" required>
+                                            <div class="form-text">Enter 0 for unlimited</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="max_subjects" class="form-label">Max Subjects <span class="text-danger">*</span></label>
+                                            <input type="number" class="form-control" id="max_subjects" name="max_subjects" min="0" required>
+                                            <div class="form-text">Enter 0 for unlimited</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="badge_level" class="form-label">Badge Level</label>
+                                            <select class="form-control" name="badge_level" id="badge_level">
+                                                <option value="none">None</option>
+                                                <option value="trial">Trial</option>
+                                                <option value="verified">Verified</option>
+                                                <option value="featured">Featured</option>
+                                                <option value="top_rated">Top Rated</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="search_ranking" class="form-label">Search Ranking</label>
+                                            <select class="form-control" name="search_ranking" id="search_ranking">
+                                                <option value="low">Low</option>
+                                                <option value="normal">Normal</option>
+                                                <option value="priority">Priority</option>
+                                                <option value="top">Top</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Features -->
+                                <div class="mb-3">
+                                    <label class="form-label">Features & Permissions</label>
+                                    <div class="col-md-6">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="show_whatsapp" name="show_whatsapp" value="1">
+                                                    <label class="form-check-label" for="show_whatsapp">
+                                                        <i class="fab fa-whatsapp me-1 text-success"></i>Show WhatsApp contact
+                                                    </label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="email_marketing_access" name="email_marketing_access" value="1">
+                                                    <label class="form-check-label" for="email_marketing_access">
+                                                        <i class="fas fa-envelope me-1 text-info"></i>Email marketing access
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="allow_video_upload" name="allow_video_upload" value="1">
+                                                    <label class="form-check-label" for="allow_video_upload">
+                                                        <i class="fas fa-video me-1 text-warning"></i>Allow video uploads
+                                                    </label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="allow_pdf_upload" name="allow_pdf_upload" value="1">
+                                                    <label class="form-check-label" for="allow_pdf_upload">
+                                                        <i class="fas fa-file-pdf me-1 text-danger"></i>Allow PDF uploads
+                                                    </label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="allow_video_solution" name="allow_video_solution" value="1">
+                                                    <label class="form-check-label" for="allow_video_solution">
+                                                        <i class="fas fa-play-circle me-1 text-primary"></i>Allow video solutions
+                                                    </label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="allow_announcements" name="allow_announcements" value="1">
+                                                    <label class="form-check-label" for="allow_announcements">
+                                                        <i class="fas fa-bullhorn me-1 text-secondary"></i>Allow announcements
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="custom_included_features" class="form-label">Custom Included Features</label>
+                                            <textarea class="form-control" id="custom_included_features" name="custom_included_features" rows="6" placeholder="One feature per line"></textarea>
+                                            <div class="form-text">Optional custom list for plan pages.</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="custom_not_included_features" class="form-label">Custom Not Included Features</label>
+                                            <textarea class="form-control" id="custom_not_included_features" name="custom_not_included_features" rows="6" placeholder="One missing feature per line"></textarea>
+                                            <div class="form-text">Optional. Leave blank when the plan includes everything you want to show.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -189,7 +304,7 @@
                                     <label class="form-check-label" for="is_active">
                                         <strong>Active Plan</strong>
                                     </label>
-                                    <div class="form-text">Make this plan available to tutors</div>
+                                    <div class="form-text">Make this plan available to <?= esc(strtolower($portalLabel)) ?></div>
                                 </div>
                             </div>
                         </div>
@@ -231,7 +346,7 @@
                 <div class="col-12">
                     <div class="card shadow-sm">
                         <div class="card-body text-end">
-                            <a href="<?= site_url('admin/subscriptions') ?>" class="btn btn-secondary me-2">
+                            <a href="<?= esc($plansUrl) ?>" class="btn btn-secondary me-2">
                                 <i class="fas fa-times me-1"></i>Cancel
                             </a>
                             <button type="submit" class="btn btn-primary">

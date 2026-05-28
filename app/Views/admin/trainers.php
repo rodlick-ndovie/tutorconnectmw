@@ -1,15 +1,15 @@
 <?= $this->extend('layouts/admin') ?>
 
 <?php $active_page = 'trainers'; ?>
-<?php $title = $title ?? 'Tutor Management - TutorConnect Malawi'; ?>
+<?php $title = $title ?? 'Regular Tutor Management - TutorConnect Malawi'; ?>
 
 <?= $this->section('content') ?>
 
 <!-- Header -->
 <div class="header-bar">
     <div>
-        <h1 class="page-title">Tutor Management</h1>
-        <p class="page-subtitle">Manage verified tutors and their profiles</p>
+        <h1 class="page-title">Regular Tutor Management</h1>
+        <p class="page-subtitle">Manage tutors from the main tutor portal separately from university tutors</p>
     </div>
     <div style="display: flex; gap: 12px;">
         <a class="btn-admin" href="<?= site_url('admin/trainers/export') ?>" style="background: linear-gradient(135deg, #059669, #10b981);">
@@ -17,6 +17,9 @@
         </a>
         <a class="btn-admin" href="<?= site_url('admin/trainers/export-pdf') ?>" style="background: linear-gradient(135deg, #dc2626, #ef4444);">
             <i class="fas fa-file-pdf me-2"></i>Export PDF
+        </a>
+        <a class="btn-admin" href="<?= site_url('admin/university-college-tutors') ?>" style="background: linear-gradient(135deg, #4f46e5, #4338ca);">
+            <i class="fas fa-university me-2"></i>University Tutors
         </a>
         <a href="#" class="btn-admin">
             <i class="fas fa-user-plus me-2"></i>Invite Tutor
@@ -31,7 +34,7 @@
             <i class="fas fa-chalkboard-teacher"></i>
         </div>
         <div class="stat-number"><?php echo number_format($stats['total_trainers'] ?? 0); ?></div>
-        <div class="stat-label">Total Tutors</div>
+        <div class="stat-label">Regular Tutors</div>
     </div>
     <div class="stat-card">
         <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
@@ -56,11 +59,24 @@
     </div>
 </div>
 
+<div class="content-card" style="margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <div>
+            <h4 style="margin: 0 0 6px; color: var(--text-dark);">Separate admin lanes</h4>
+            <p style="margin: 0; color: var(--text-light);">This page only manages tutors from the main tutor portal. University and college tutors are reviewed in their own admin section.</p>
+        </div>
+        <a class="btn-admin" href="<?= site_url('admin/university-college-tutors') ?>" style="white-space: nowrap;">
+            <i class="fas fa-university me-2"></i>Open University Tutors
+            <span class="badge bg-light text-dark ms-2"><?= number_format($university_tutor_count ?? 0) ?></span>
+        </a>
+    </div>
+</div>
+
 <!-- Tutor Cards -->
 <?php if (!empty($trainers)): ?>
 <div class="content-card">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">All Tutors</h4>
+        <h4 class="mb-0">All Regular Tutors</h4>
         <div class="d-flex gap-2">
             <select class="form-select" style="width: 150px;">
                 <option>All Status</option>
@@ -68,7 +84,7 @@
                 <option>Pending</option>
                 <option>Suspended</option>
             </select>
-            <input type="text" class="form-control" placeholder="Search tutors..." style="width: 250px;">
+            <input type="text" class="form-control" placeholder="Search regular tutors..." style="width: 250px;">
         </div>
     </div>
 
@@ -165,8 +181,8 @@
         <div style="font-size: 48px; color: var(--text-light); margin-bottom: 20px;">
             <i class="fas fa-chalkboard-teacher"></i>
         </div>
-        <h3 style="color: var(--text-light); margin-bottom: 16px;">No Tutors Yet</h3>
-        <p style="color: var(--text-light); margin-bottom: 24px;">Get started by inviting qualified tutors to join your platform.</p>
+        <h3 style="color: var(--text-light); margin-bottom: 16px;">No Regular Tutors Yet</h3>
+        <p style="color: var(--text-light); margin-bottom: 24px;">No tutors from the main tutor portal are available yet.</p>
         <a href="#" class="btn btn-admin">
             <i class="fas fa-user-plus me-2"></i>Invite First Tutor
         </a>

@@ -15,6 +15,12 @@ class Dashboard extends BaseController
             return redirect()->to('/login')->with('error', 'Please login first');
         }
 
+        $user = null;
+
+        if (session()->get('role') === 'trainer' && session()->get('portal_type') === 'university') {
+            return redirect()->to('university-portal/dashboard');
+        }
+
         // For trainers, enforce document upload completion
         if (session()->get('role') === 'trainer') {
             $userId = session()->get('user_id');
@@ -69,6 +75,7 @@ class Dashboard extends BaseController
 
         switch ($role) {
             case 'admin':
+            case 'sub-admin':
                 return $this->adminDashboard($data);
             case 'trainer':
                 return $this->trainerDashboard($data);
@@ -163,6 +170,33 @@ class Dashboard extends BaseController
             $data['stats']['subscription_revenue'] = $subscriptionRevenue && $subscriptionRevenue->subscription_revenue ?
                 (int)$subscriptionRevenue->subscription_revenue : 0;
 
+            $subscriptionRevenueBreakdown = $db->table('tutor_subscriptions ts')
+                ->select('
+                    SUM(CASE WHEN COALESCE(sp.portal_type, "trainer") = "university" THEN sp.price_monthly ELSE 0 END) as university_subscription_revenue,
+                    SUM(CASE WHEN COALESCE(sp.portal_type, "trainer") != "university" THEN sp.price_monthly ELSE 0 END) as tutor_subscription_revenue,
+                    SUM(CASE WHEN COALESCE(sp.portal_type, "trainer") = "university" THEN 1 ELSE 0 END) as university_active_subscriptions,
+                    SUM(CASE WHEN COALESCE(sp.portal_type, "trainer") != "university" THEN 1 ELSE 0 END) as tutor_active_subscriptions
+                ')
+                ->join('subscription_plans sp', 'sp.id = ts.plan_id')
+                ->where('ts.status', 'active')
+                ->where('ts.current_period_start <=', date('Y-m-d H:i:s'))
+                ->where('ts.current_period_end >=', date('Y-m-d H:i:s'))
+                ->get()
+                ->getRow();
+
+            $data['stats']['tutor_subscription_revenue'] = $subscriptionRevenueBreakdown
+                ? (int) ($subscriptionRevenueBreakdown->tutor_subscription_revenue ?? 0)
+                : 0;
+            $data['stats']['university_subscription_revenue'] = $subscriptionRevenueBreakdown
+                ? (int) ($subscriptionRevenueBreakdown->university_subscription_revenue ?? 0)
+                : 0;
+            $data['stats']['tutor_active_subscriptions'] = $subscriptionRevenueBreakdown
+                ? (int) ($subscriptionRevenueBreakdown->tutor_active_subscriptions ?? 0)
+                : 0;
+            $data['stats']['university_active_subscriptions'] = $subscriptionRevenueBreakdown
+                ? (int) ($subscriptionRevenueBreakdown->university_active_subscriptions ?? 0)
+                : 0;
+
             // Add subscription revenue to total revenue for dashboard display
             $data['stats']['total_revenue'] += $data['stats']['subscription_revenue'];
 
@@ -183,6 +217,10 @@ class Dashboard extends BaseController
             $data['stats']['active_subscriptions'] = 0;
             $data['stats']['expired_subscriptions'] = 0;
             $data['stats']['subscription_revenue'] = 0;
+            $data['stats']['tutor_subscription_revenue'] = 0;
+            $data['stats']['university_subscription_revenue'] = 0;
+            $data['stats']['tutor_active_subscriptions'] = 0;
+            $data['stats']['university_active_subscriptions'] = 0;
             $data['stats']['paychangu_revenue'] = 0;
         }
 
@@ -577,6 +615,10 @@ class Dashboard extends BaseController
             // Get all active plans, ordered by sort_order, then price
             $plans = $db->table('subscription_plans')
                 ->where('is_active', 1)
+                ->groupStart()
+                    ->where('portal_type', 'trainer')
+                    ->orWhere('portal_type', null)
+                ->groupEnd()
                 ->orderBy('sort_order', 'ASC')
                 ->orderBy('price_monthly', 'ASC')
                 ->get()
@@ -626,7 +668,6 @@ class Dashboard extends BaseController
         $activities = [];
 
         try {
-            // Recent user registrations
             $recentUsers = $db->table('users')
                 ->select('id, username, first_name, last_name, role, created_at')
                 ->orderBy('created_at', 'DESC')
@@ -635,21 +676,23 @@ class Dashboard extends BaseController
                 ->getResultArray();
 
             foreach ($recentUsers as $user) {
+                $firstName = trim((string) ($user['first_name'] ?? ''));
+                $lastName = trim((string) ($user['last_name'] ?? ''));
+                $username = trim((string) ($user['username'] ?? ''));
+                $displayName = trim($firstName . ' ' . $lastName);
+                $displayName = $displayName !== '' ? $displayName : ($username !== '' ? $username : 'A new user');
+                $createdAt = (string) ($user['created_at'] ?? date('Y-m-d H:i:s'));
+
                 $activities[] = [
                     'type' => 'user_registration',
-                    'icon' => substr($user['first_name'], 0, 1) ?: substr($user['username'], 0, 1),
-                    'title' => 'New ' . ucfirst($user['role']) . ' Registration',
-                    'description' => $user['first_name'] . ' ' . $user['last_name'] . ' joined the platform',
-                    'time' => $this->timeAgo($user['created_at']),
-                    'timestamp' => strtotime($user['created_at'])
+                    'icon' => strtoupper(substr($displayName, 0, 1)),
+                    'title' => 'New ' . ucfirst((string) ($user['role'] ?? 'User')) . ' Registration',
+                    'description' => $displayName . ' joined the platform',
+                    'time' => $this->timeAgo($createdAt),
+                    'timestamp' => strtotime($createdAt) ?: time(),
                 ];
             }
 
-
-
-
-
-            // Recent subscriptions
             $recentSubscriptions = $db->table('tutor_subscriptions ts')
                 ->select('ts.created_at, u.first_name, u.last_name, sp.name as plan_name')
                 ->join('users u', 'u.id = ts.user_id')
@@ -663,33 +706,34 @@ class Dashboard extends BaseController
                 ->getResultArray();
 
             foreach ($recentSubscriptions as $subscription) {
+                $subscriberName = trim((string) ($subscription['first_name'] ?? '') . ' ' . (string) ($subscription['last_name'] ?? ''));
+                $subscriberName = $subscriberName !== '' ? $subscriberName : 'A tutor';
+                $createdAt = (string) ($subscription['created_at'] ?? date('Y-m-d H:i:s'));
+
                 $activities[] = [
                     'type' => 'subscription',
-                    'icon' => '💳',
+                    'icon' => 'S',
                     'title' => 'Subscription Activated',
-                    'description' => $subscription['first_name'] . ' ' . $subscription['last_name'] . ' activated ' . $subscription['plan_name'] . ' plan',
-                    'time' => $this->timeAgo($subscription['created_at']),
-                    'timestamp' => strtotime($subscription['created_at'])
+                    'description' => $subscriberName . ' activated ' . ($subscription['plan_name'] ?? 'a subscription') . ' plan',
+                    'time' => $this->timeAgo($createdAt),
+                    'timestamp' => strtotime($createdAt) ?: time(),
                 ];
             }
-
-        } catch (\Exception $e) {
-            // If tables don't exist yet, return some fallback activities
+        } catch (\Throwable $e) {
             $activities = [
                 [
                     'type' => 'system',
-                    'icon' => 'ℹ️',
+                    'icon' => 'i',
                     'title' => 'System Initialized',
                     'description' => 'TutorConnect Malawi platform is ready',
                     'time' => 'Just now',
-                    'timestamp' => time()
-                ]
+                    'timestamp' => time(),
+                ],
             ];
         }
 
-        // Sort activities by timestamp (most recent first) and limit to 6
-        usort($activities, function($a, $b) {
-            return $b['timestamp'] <=> $a['timestamp'];
+        usort($activities, static function ($a, $b) {
+            return ($b['timestamp'] ?? 0) <=> ($a['timestamp'] ?? 0);
         });
 
         return array_slice($activities, 0, 6);

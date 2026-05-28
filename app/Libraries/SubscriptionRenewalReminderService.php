@@ -54,7 +54,9 @@ class SubscriptionRenewalReminderService
         $maxReminderSeconds = max(array_column(self::REMINDER_DEFINITIONS, 'seconds'));
         $scanUntil = date('Y-m-d H:i:s', $nowTs + $maxReminderSeconds);
 
-        $this->subscriptionModel->markExpiredSubscriptions();
+        if (!$dryRun) {
+            $this->subscriptionModel->markExpiredSubscriptions();
+        }
 
         $subscriptions = $this->subscriptionModel
             ->select('tutor_subscriptions.*, users.first_name, users.last_name, users.username, users.email, subscription_plans.name as plan_name, subscription_plans.price_monthly')

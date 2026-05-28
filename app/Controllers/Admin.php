@@ -6,54 +6,1160 @@ use App\Libraries\ParentRequestMatcher;
 use App\Models\ParentRequestModel;
 use App\Models\User;
 use App\Models\TutorModel;
+use App\Models\CurriculumSubjectsModel;
 use App\Models\SiteSettingModel;
 use App\Models\ContactMessageModel;
 use App\Models\JapanApplicationModel;
 use App\Models\JapanApplicationAccessModel;
 use App\Models\ResourceModel;
 use App\Models\PastPapersModel;
+use App\Models\SubscriptionPlanModel;
+use App\Models\TutorSubscriptionModel;
 use App\Models\TutorVideosModel;
+use App\Models\UniversityCollegeTutorModel;
 use CodeIgniter\Exceptions\PageNotFoundException;
+use CodeIgniter\HTTP\RequestInterface;
+use CodeIgniter\HTTP\ResponseInterface;
 use Config\Database;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Psr\Log\LoggerInterface;
 
 class Admin extends BaseController
 {
-    protected $userModel;
-    protected $tutorModel;
-    protected \App\Models\SubscriptionPlanModel $subscriptionPlanModel;
-    protected \App\Models\TutorSubscriptionModel $tutorSubscriptionModel;
-    protected \App\Models\CurriculumSubjectsModel $curriculumSubjectsModel;
+    private const UNIVERSITY_SERVICE_CATEGORIES = [
+        'Research & Dissertation Support' => [
+            'Methodology guidance',
+            'Data cleaning',
+            'Proposal structuring',
+            'Referencing support',
+            'Data analysis interpretation',
+        ],
+        'ICT & Programming' => [
+            'Python',
+            'Java',
+            'Web Development',
+            'Database Systems',
+            'Microsoft Excel',
+            'Power BI Basics',
+            'Data Science Basics',
+            'Introduction to AI Tools',
+            'Data Visualization',
+        ],
+        'Accounting & Finance' => [
+            'Financial Accounting',
+            'Cost Accounting',
+            'Taxation Basics',
+            'Economics',
+            'Finance',
+        ],
+        'Mathematics' => [
+            'Calculus',
+            'Algebra',
+            'Engineering Mathematics',
+            'Business Mathematics',
+        ],
+        'Statistics & Data Analysis' => [
+            'SPSS',
+            'STATA',
+            'Excel Data Analysis',
+            'Quantitative Methods',
+            'Research Methods',
+            'Data Analysis for Dissertations',
+        ],
+    ];
+
+    protected User $userModel;
     protected SiteSettingModel $siteSettingModel;
     protected ContactMessageModel $contactMessageModel;
     protected JapanApplicationModel $japanApplicationModel;
     protected JapanApplicationAccessModel $japanApplicationAccessModel;
+    protected SubscriptionPlanModel $subscriptionPlanModel;
+    protected TutorSubscriptionModel $tutorSubscriptionModel;
+    protected CurriculumSubjectsModel $curriculumSubjectsModel;
     protected ResourceModel $resourceModel;
     protected PastPapersModel $pastPapersModel;
     protected TutorVideosModel $tutorVideosModel;
+    protected UniversityCollegeTutorModel $universityCollegeTutorModel;
+    protected ?array $universityTutorLookup = null;
 
-    public function __construct()
+    public function initController(RequestInterface $request, ResponseInterface $response, LoggerInterface $logger)
     {
-        $this->userModel = new User();
-        $this->tutorModel = new TutorModel();
-        helper(['form', 'url']);
+        parent::initController($request, $response, $logger);
 
-        // Load subscription models
-        $this->subscriptionPlanModel = new \App\Models\SubscriptionPlanModel();
-        $this->tutorSubscriptionModel = new \App\Models\TutorSubscriptionModel();
-        $this->curriculumSubjectsModel = new \App\Models\CurriculumSubjectsModel();
+        $this->userModel = new User();
         $this->siteSettingModel = new SiteSettingModel();
         $this->contactMessageModel = new ContactMessageModel();
         $this->japanApplicationModel = new JapanApplicationModel();
         $this->japanApplicationAccessModel = new JapanApplicationAccessModel();
+        $this->subscriptionPlanModel = new SubscriptionPlanModel();
+        $this->tutorSubscriptionModel = new TutorSubscriptionModel();
+        $this->curriculumSubjectsModel = new CurriculumSubjectsModel();
         $this->resourceModel = new ResourceModel();
         $this->pastPapersModel = new PastPapersModel();
         $this->tutorVideosModel = new TutorVideosModel();
+        $this->universityCollegeTutorModel = new UniversityCollegeTutorModel();
     }
+
+    // === UNIVERSITY & COLLEGE SUPPORT ADMIN MANAGEMENT ===
+    public function universityCollegeTutors()
+    {
+        $this->requireAdminAccess();
+        $model = new \App\Models\UniversityCollegeTutorModel();
+        $search = trim((string) $this->request->getGet('q'));
+        $statusFilter = trim((string) $this->request->getGet('status'));
+        $reviewFilter = trim((string) $this->request->getGet('review'));
+        $perPage = (int) ($this->request->getGet('per_page') ?: 10);
+        $perPage = in_array($perPage, [10, 25, 50, 100], true) ? $perPage : 10;
+        $page = max(1, (int) ($this->request->getGet('page') ?: 1));
+
+        $allTutors = array_map([$this, 'attachUniversityTutorAccountMeta'], $model->orderBy('created_at', 'DESC')->findAll());
+        $filteredTutors = array_values(array_filter($allTutors, static function (array $tutor) use ($search, $statusFilter, $reviewFilter): bool {
+            if ($statusFilter !== '' && (string) ($tutor['status'] ?? '') !== $statusFilter) {
+                return false;
+            }
+
+            if ($reviewFilter === 'ready' && empty($tutor['is_ready_for_review'])) {
+                return false;
+            }
+
+            if ($reviewFilter === 'incomplete' && !empty($tutor['is_ready_for_review'])) {
+                return false;
+            }
+
+            if ($search !== '') {
+                $haystack = strtolower(implode(' ', [
+                    $tutor['full_name'] ?? '',
+                    $tutor['email'] ?? '',
+                    $tutor['phone'] ?? '',
+                    $tutor['reference_code'] ?? '',
+                    $tutor['city_location'] ?? '',
+                ]));
+
+                if (!str_contains($haystack, strtolower($search))) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
+
+        $totalFiltered = count($filteredTutors);
+        $totalPages = $totalFiltered > 0 ? (int) ceil($totalFiltered / $perPage) : 1;
+        $page = min($page, $totalPages);
+        $offset = ($page - 1) * $perPage;
+        $tutors = array_slice($filteredTutors, $offset, $perPage);
+
+        $data = [
+            'title' => 'University Tutors Management',
+            'tutors' => $tutors,
+            'all_tutors' => $allTutors,
+            'filters' => [
+                'q' => $search,
+                'status' => $statusFilter,
+                'review' => $reviewFilter,
+                'per_page' => $perPage,
+            ],
+            'pager' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $totalFiltered,
+                'total_pages' => $totalPages,
+            ],
+        ];
+        $data = $this->getAdminData($data);
+        return view('admin/university_college_tutors', $data);
+    }
+
+    public function viewUniversityCollegeTutor($id)
+    {
+        $this->requireAdminAccess();
+        $model = new \App\Models\UniversityCollegeTutorModel();
+        $tutor = $model->find($id);
+        if (!$tutor) {
+            return redirect()->to('admin/university-college-tutors')->with('error', 'Tutor not found.');
+        }
+        $tutor = $this->attachUniversityTutorAccountMeta($tutor);
+        $data = [
+            'title' => 'University/College Tutor Details',
+            'tutor' => $tutor,
+        ];
+        $data = $this->getAdminData($data);
+        return view('admin/view_university_college_tutor', $data);
+    }
+
+    public function approveUniversityCollegeTutor($id)
+    {
+        $this->requireAdminAccess();
+        $model = new \App\Models\UniversityCollegeTutorModel();
+        $tutor = $model->find($id);
+        if (!$tutor) {
+            return redirect()->to('admin/university-college-tutors')->with('error', 'Tutor not found.');
+        }
+
+        if (!$model->isProfileReadyForReview($tutor)) {
+            return redirect()->to('admin/view-university-college-tutor/' . $id)
+                ->with('error', 'This university tutor has not submitted the full profile details required for approval yet.');
+        }
+
+        $model->update($id, ['status' => 'approved', 'updated_at' => date('Y-m-d H:i:s')]);
+        $this->syncUniversityTutorAccountStatus(array_merge($tutor, ['status' => 'approved']), 'approved');
+        return redirect()->to('admin/university-college-tutors')->with('success', 'Tutor approved successfully.');
+    }
+
+    public function rejectUniversityCollegeTutor($id)
+    {
+        $this->requireAdminAccess();
+        $model = new \App\Models\UniversityCollegeTutorModel();
+        $tutor = $model->find($id);
+        if (!$tutor) {
+            return redirect()->to('admin/university-college-tutors')->with('error', 'Tutor not found.');
+        }
+        $model->update($id, ['status' => 'rejected', 'updated_at' => date('Y-m-d H:i:s')]);
+        $this->syncUniversityTutorAccountStatus(array_merge($tutor, ['status' => 'rejected']), 'rejected');
+        return redirect()->to('admin/university-college-tutors')->with('success', 'Tutor rejected.');
+    }
+
+    public function deleteUniversityCollegeTutor($id)
+    {
+        $this->requireAdminAccess();
+
+        $model = new \App\Models\UniversityCollegeTutorModel();
+        $tutor = $model->find((int) $id);
+        if (!$tutor) {
+            return redirect()->to('admin/university-college-tutors')->with('error', 'Tutor not found.');
+        }
+
+        $linkedUser = $this->findLinkedUniversityTutorUser($tutor);
+        $db = Database::connect();
+
+        try {
+            $db->transBegin();
+
+            if ($linkedUser && !empty($linkedUser['id'])) {
+                $this->tutorSubscriptionModel->where('user_id', (int) $linkedUser['id'])->delete();
+                $this->userModel->delete((int) $linkedUser['id']);
+            }
+
+            if (!$model->delete((int) $id)) {
+                throw new \RuntimeException('Could not delete university tutor profile.');
+            }
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('Database transaction failed while deleting university tutor.');
+            }
+
+            $db->transCommit();
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            log_message('error', 'University tutor delete failed: ' . $e->getMessage());
+
+            return redirect()
+                ->to('admin/view-university-college-tutor/' . (int) $id)
+                ->with('error', 'Could not delete this university tutor account. Please try again.');
+        }
+
+        $this->deleteUniversityTutorFiles($tutor);
+        $this->universityTutorLookup = null;
+
+        return redirect()
+            ->to('admin/university-college-tutors')
+            ->with('success', 'University tutor account deleted successfully.');
+    }
+
+    public function exportUniversityCollegeTutorsExcel()
+    {
+        $this->requireAdminAccess();
+        $model = new \App\Models\UniversityCollegeTutorModel();
+        $tutors = $model->orderBy('created_at', 'DESC')->findAll();
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $headers = [
+            'No.', 'Full Name', 'Email', 'Phone', 'Status', 'Created At', 'Updated At'
+        ];
+        foreach ($headers as $colIndex => $header) {
+            $this->sheetSetValue($sheet, $colIndex + 1, 1, $header);
+        }
+        $row = 2;
+        $no = 1;
+        foreach ($tutors as $tutor) {
+            $this->sheetSetValue($sheet, 1, $row, $no);
+            $this->sheetSetValue($sheet, 2, $row, (string)($tutor['full_name'] ?? ''));
+            $this->sheetSetValue($sheet, 3, $row, (string)($tutor['email'] ?? ''));
+            $this->sheetSetValue($sheet, 4, $row, (string)($tutor['phone'] ?? ''));
+            $this->sheetSetValue($sheet, 5, $row, (string)($tutor['status'] ?? ''));
+            $this->sheetSetValue($sheet, 6, $row, (string)($tutor['created_at'] ?? ''));
+            $this->sheetSetValue($sheet, 7, $row, (string)($tutor['updated_at'] ?? ''));
+            $row++;
+            $no++;
+        }
+        $sheet->freezePane('A2');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        ob_start();
+        $writer->save('php://output');
+        $binary = ob_get_clean();
+        $filename = 'university_college_tutors_' . date('Ymd_His') . '.xlsx';
+        return $this->response
+            ->setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setHeader('Cache-Control', 'max-age=0')
+            ->setBody($binary);
+    }
+
+    public function exportUniversityCollegeTutorsPdf()
+    {
+        $this->requireAdminAccess();
+        $model = new \App\Models\UniversityCollegeTutorModel();
+        $tutors = $model->orderBy('created_at', 'DESC')->findAll();
+        $html = view('admin/university_college_tutors_export_pdf', ['tutors' => $tutors]);
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+        $pdf = $dompdf->output();
+        $filename = 'university_college_tutors_' . date('Ymd_His') . '.pdf';
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setHeader('Cache-Control', 'max-age=0')
+            ->setBody($pdf);
+    }
+
+    private function attachUniversityTutorAccountMeta(array $tutor): array
+    {
+        $linkedUser = $this->findLinkedUniversityTutorUser($tutor);
+        $completionGaps = $this->universityCollegeTutorModel->getProfileCompletionGaps($tutor);
+        $tutor['linked_user'] = $linkedUser;
+        $tutor['linked_username'] = $tutor['username'] ?? ($linkedUser['username'] ?? null);
+        $tutor['linked_tutor_status'] = $linkedUser['tutor_status'] ?? null;
+        $tutor['linked_is_active'] = $linkedUser['is_active'] ?? null;
+        $tutor['linked_is_verified'] = $linkedUser['is_verified'] ?? null;
+        $tutor['linked_subscription_plan'] = $linkedUser['subscription_plan'] ?? null;
+        $tutor['institutions'] = $this->universityCollegeTutorModel->decodeJsonList($tutor['institutions_json'] ?? null);
+        $tutor['service_areas'] = $this->universityCollegeTutorModel->decodeJsonList($tutor['service_areas_json'] ?? null);
+        $tutor['service_area_groups'] = $this->groupUniversityServiceAreas($tutor['service_areas']);
+        $tutor['references'] = $this->universityCollegeTutorModel->decodeJsonList($tutor['references_json'] ?? null);
+        $tutor['available_days'] = $this->universityCollegeTutorModel->decodeJsonList($tutor['available_days_json'] ?? null);
+        $tutor['preferred_times'] = $this->universityCollegeTutorModel->decodeJsonList($tutor['preferred_times_json'] ?? null);
+        $tutor['certification_files'] = $this->universityCollegeTutorModel->decodeJsonList($tutor['certification_files_json'] ?? null);
+        $tutor['completion_gaps'] = $completionGaps;
+        $tutor['is_ready_for_review'] = $completionGaps === [];
+
+        return $tutor;
+    }
+
+    private function groupUniversityServiceAreas(array $selectedServices): array
+    {
+        $selectedServices = array_values(array_unique(array_filter(array_map(static fn($item) => trim((string) $item), $selectedServices))));
+        $groups = [];
+
+        foreach (self::UNIVERSITY_SERVICE_CATEGORIES as $category => $services) {
+            $matches = array_values(array_intersect($services, $selectedServices));
+            if ($matches !== []) {
+                $groups[$category] = $matches;
+            }
+        }
+
+        $knownServices = array_merge(...array_values(self::UNIVERSITY_SERVICE_CATEGORIES));
+        $otherServices = array_values(array_diff($selectedServices, $knownServices));
+        if ($otherServices !== []) {
+            $groups['Other Services'] = $otherServices;
+        }
+
+        return $groups;
+    }
+
+    private function getUniversityTutorLookup(): array
+    {
+        if ($this->universityTutorLookup !== null) {
+            return $this->universityTutorLookup;
+        }
+
+        $lookup = [
+            'by_user_id' => [],
+            'by_email' => [],
+            'by_username' => [],
+        ];
+
+        foreach ($this->universityCollegeTutorModel->findAll() as $profile) {
+            $userId = (int) ($profile['user_id'] ?? 0);
+            if ($userId > 0) {
+                $lookup['by_user_id'][$userId] = $profile;
+            }
+
+            $email = strtolower(trim((string) ($profile['email'] ?? '')));
+            if ($email !== '') {
+                $lookup['by_email'][$email] = $profile;
+            }
+
+            $username = trim((string) ($profile['username'] ?? ''));
+            if ($username !== '') {
+                $lookup['by_username'][$username] = $profile;
+            }
+        }
+
+        $this->universityTutorLookup = $lookup;
+
+        return $lookup;
+    }
+
+    private function findUniversityProfileForUser(array $user): ?array
+    {
+        $lookup = $this->getUniversityTutorLookup();
+
+        $userId = (int) ($user['id'] ?? 0);
+        if ($userId > 0 && isset($lookup['by_user_id'][$userId])) {
+            return $lookup['by_user_id'][$userId];
+        }
+
+        $email = strtolower(trim((string) ($user['email'] ?? '')));
+        if ($email !== '' && isset($lookup['by_email'][$email])) {
+            return $lookup['by_email'][$email];
+        }
+
+        $username = trim((string) ($user['username'] ?? ''));
+        if ($username !== '' && isset($lookup['by_username'][$username])) {
+            return $lookup['by_username'][$username];
+        }
+
+        return null;
+    }
+
+    private function isUniversityTutorAccount(array $user): bool
+    {
+        if (($user['role'] ?? '') !== 'trainer') {
+            return false;
+        }
+
+        return $this->findUniversityProfileForUser($user) !== null;
+    }
+
+    private function filterRegularTutors(array $users): array
+    {
+        return array_values(array_filter($users, fn(array $user): bool => !$this->isUniversityTutorAccount($user)));
+    }
+
+    private function getRegularTutors(bool $withDeleted = false): array
+    {
+        $userModel = new User();
+        if ($withDeleted) {
+            $userModel = $userModel->withDeleted();
+        }
+
+        $tutors = $userModel->where('role', 'trainer')->orderBy('created_at', 'DESC')->findAll();
+
+        return $this->filterRegularTutors($tutors);
+    }
+
+    private function resolveTutorManagementTarget(int $userId, bool $withDeleted = false): array
+    {
+        $userModel = new User();
+        if ($withDeleted) {
+            $userModel = $userModel->withDeleted();
+        }
+
+        $tutor = $userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $universityProfile = $tutor ? $this->findUniversityProfileForUser($tutor) : null;
+
+        return [
+            'tutor' => $tutor,
+            'university_profile' => $universityProfile,
+        ];
+    }
+
+    private function redirectUniversityTutorManagement(array $profile, string $message)
+    {
+        return redirect()
+            ->to('admin/view-university-college-tutor/' . (int) ($profile['id'] ?? 0))
+            ->with('info', $message);
+    }
+
+    private function respondUniversityTutorManagementRedirect(array $profile, string $message)
+    {
+        $redirectUrl = site_url('admin/view-university-college-tutor/' . (int) ($profile['id'] ?? 0));
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $message,
+                'redirect_url' => $redirectUrl,
+                'is_university_tutor' => true,
+            ]);
+        }
+
+        return redirect()->to($redirectUrl)->with('info', $message);
+    }
+
+    private function annotateAdminUserPortals(array $users): array
+    {
+        foreach ($users as &$user) {
+            $universityProfile = $this->findUniversityProfileForUser($user);
+            if ($universityProfile) {
+                $user['admin_portal_type'] = 'university';
+                $user['admin_role_label'] = 'Uni Tutor';
+                $user['linked_university_tutor_id'] = $universityProfile['id'] ?? null;
+            } elseif (($user['role'] ?? '') === 'trainer') {
+                $user['admin_portal_type'] = 'trainer';
+                $user['admin_role_label'] = 'Tutor';
+            } else {
+                $user['admin_portal_type'] = (string) ($user['role'] ?? 'user');
+                $user['admin_role_label'] = ucfirst((string) ($user['role'] ?? 'User'));
+            }
+        }
+        unset($user);
+
+        return $users;
+    }
+
+    private function normalizeSubscriptionDisplayState(array $subscription, ?int $now = null): array
+    {
+        $now ??= time();
+        $startTime = !empty($subscription['current_period_start']) ? strtotime((string) $subscription['current_period_start']) : null;
+        $endTime = !empty($subscription['current_period_end']) ? strtotime((string) $subscription['current_period_end']) : null;
+
+        $subscription['display_status'] = $subscription['status'] ?? 'inactive';
+        $subscription['is_currently_active'] = ($subscription['status'] ?? '') === 'active'
+            && ($startTime === null || $startTime <= $now)
+            && ($endTime === null || $endTime >= $now);
+
+        if (($subscription['status'] ?? '') === 'active' && $startTime !== null && $startTime > $now) {
+            $subscription['display_status'] = 'scheduled';
+            $subscription['is_currently_active'] = false;
+        } elseif (($subscription['status'] ?? '') === 'active' && $endTime !== null && $endTime < $now) {
+            $subscription['display_status'] = 'expired';
+            $subscription['is_currently_active'] = false;
+        }
+
+        return $subscription;
+    }
+
+    private function annotateSubscriptionPortal(array $subscription): array
+    {
+        $userStub = [
+            'id' => (int) ($subscription['user_id'] ?? 0),
+            'email' => (string) ($subscription['email'] ?? ''),
+            'username' => (string) ($subscription['username'] ?? ''),
+        ];
+
+        $universityProfile = $this->findUniversityProfileForUser($userStub);
+
+        if ($universityProfile) {
+            $subscription['portal_type'] = 'university';
+            $subscription['portal_label'] = 'University Tutor';
+            $subscription['linked_university_tutor_id'] = $universityProfile['id'] ?? null;
+        } else {
+            $subscription['portal_type'] = 'trainer';
+            $subscription['portal_label'] = 'Tutor';
+            $subscription['linked_university_tutor_id'] = null;
+        }
+
+        return $subscription;
+    }
+
+    private function buildSubscriptionPlanUsage(array $subscriptions): array
+    {
+        $usage = [];
+
+        foreach ($subscriptions as $subscription) {
+            $planId = (int) ($subscription['plan_id'] ?? 0);
+            if ($planId <= 0) {
+                continue;
+            }
+
+            if (!isset($usage[$planId])) {
+                $usage[$planId] = [
+                    'total_subscriptions' => 0,
+                    'active_subscriptions' => 0,
+                    'regular_subscriptions' => 0,
+                    'regular_active_subscriptions' => 0,
+                    'university_subscriptions' => 0,
+                    'university_active_subscriptions' => 0,
+                ];
+            }
+
+            $usage[$planId]['total_subscriptions']++;
+
+            $isUniversity = ($subscription['portal_type'] ?? '') === 'university';
+            $isActive = !empty($subscription['is_currently_active']);
+
+            if ($isUniversity) {
+                $usage[$planId]['university_subscriptions']++;
+                if ($isActive) {
+                    $usage[$planId]['university_active_subscriptions']++;
+                }
+            } else {
+                $usage[$planId]['regular_subscriptions']++;
+                if ($isActive) {
+                    $usage[$planId]['regular_active_subscriptions']++;
+                }
+            }
+
+            if ($isActive) {
+                $usage[$planId]['active_subscriptions']++;
+            }
+        }
+
+        return $usage;
+    }
+
+    private function getAssignableSubscriptionTutors(array $subscriptions, ?string $portalType = null): array
+    {
+        $blockedUserIds = [];
+
+        foreach ($subscriptions as $subscription) {
+            $displayStatus = strtolower((string) ($subscription['display_status'] ?? $subscription['status'] ?? ''));
+            if (in_array($displayStatus, ['active', 'scheduled', 'pending'], true)) {
+                $blockedUserIds[(int) ($subscription['user_id'] ?? 0)] = true;
+            }
+        }
+
+        $trainerUsers = $this->annotateAdminUserPortals(
+            (new User())->where('role', 'trainer')->orderBy('first_name', 'ASC')->orderBy('last_name', 'ASC')->findAll()
+        );
+
+        return array_values(array_filter($trainerUsers, static function (array $user) use ($blockedUserIds, $portalType): bool {
+            $userId = (int) ($user['id'] ?? 0);
+            if ($userId <= 0 || isset($blockedUserIds[$userId])) {
+                return false;
+            }
+
+            if ($portalType === 'university') {
+                return ($user['admin_portal_type'] ?? '') === 'university';
+            }
+
+            if ($portalType === 'trainer') {
+                return ($user['admin_portal_type'] ?? '') !== 'university';
+            }
+
+            return true;
+        }));
+    }
+
+    private function findLinkedUniversityTutorUser(array $tutor): ?array
+    {
+        $userModel = new User();
+
+        if (!empty($tutor['user_id'])) {
+            $user = $userModel->where('id', (int) $tutor['user_id'])->where('role', 'trainer')->first();
+            if ($user) {
+                return $user;
+            }
+        }
+
+        if (!empty($tutor['email'])) {
+            return $userModel->where('email', $tutor['email'])->where('role', 'trainer')->first();
+        }
+
+        return null;
+    }
+
+    private function syncUniversityTutorAccountStatus(array $tutor, string $status): void
+    {
+        $user = $this->findLinkedUniversityTutorUser($tutor);
+        if (!$user) {
+            return;
+        }
+
+        if (empty($tutor['user_id']) || empty($tutor['username'])) {
+            (new \App\Models\UniversityCollegeTutorModel())->update((int) $tutor['id'], [
+                'user_id' => (int) $user['id'],
+                'username' => $tutor['username'] ?? ($user['username'] ?? null),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $userModel = new User();
+
+        if ($status === 'approved') {
+            $updateData = [
+                'tutor_status' => 'approved',
+                'is_verified' => 1,
+                'registration_completed' => 1,
+                'approved_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+
+            if ((int) ($user['is_active'] ?? 0) === 0) {
+                $updateData['is_active'] = 1;
+            }
+
+            if ($userModel->update((int) $user['id'], $updateData)) {
+                $freshUser = $userModel->find((int) $user['id']);
+                if ($freshUser) {
+                    $this->sendTutorApprovalEmail($freshUser);
+                }
+            }
+
+            return;
+        }
+
+        if ($status === 'rejected') {
+            $userModel->update((int) $user['id'], [
+                'tutor_status' => 'rejected',
+                'registration_completed' => 1,
+                'is_active' => 1,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+    }
+
+    private function deleteUniversityTutorFiles(array $tutor): void
+    {
+        $paths = [
+            $tutor['profile_picture'] ?? '',
+            $tutor['national_id_file'] ?? '',
+        ];
+
+        foreach ($this->universityCollegeTutorModel->decodeJsonList($tutor['certification_files_json'] ?? null) as $path) {
+            $paths[] = $path;
+        }
+
+        foreach ($paths as $path) {
+            $path = trim((string) $path);
+            if ($path === '') {
+                continue;
+            }
+
+            $relativePath = ltrim(str_replace(['../', '..\\'], '', $path), '/\\');
+            $absolutePath = FCPATH . $relativePath;
+
+            if (is_file($absolutePath)) {
+                @unlink($absolutePath);
+            }
+        }
+    }
+
+    public function universityLectureRequests()
+    {
+        $this->requireAdminAccess();
+        $this->ensureUniversityLectureRequestTrackingTables();
+        $model = new \App\Models\UniversityLectureRequestModel();
+        $requests = $model->orderBy('created_at', 'DESC')->findAll();
+        $requests = $this->attachUniversityLectureAcceptanceSummaries($requests);
+        $data = [
+            'title' => 'University Lecture Requests Management',
+            'requests' => $requests,
+        ];
+        return view('admin/university_lecture_requests', $data);
+    }
+
+    public function viewUniversityLectureRequest($id)
+    {
+        $this->requireAdminAccess();
+        $this->ensureUniversityLectureRequestTrackingTables();
+        $model = new \App\Models\UniversityLectureRequestModel();
+        $request = $model->find($id);
+        if (!$request) {
+            return redirect()->to('admin/university-lecture-requests')->with('error', 'Lecture request not found.');
+        }
+        $acceptances = $this->getUniversityLectureAcceptances((int) $request['id']);
+        $data = [
+            'title' => 'Lecture Request Details',
+            'request' => $request,
+            'acceptances' => $acceptances,
+        ];
+        return view('admin/view_university_lecture_request', $data);
+    }
+
+    public function updateUniversityLectureRequestStatus($id)
+    {
+        $this->requireAdminAccess();
+        $model = new \App\Models\UniversityLectureRequestModel();
+        $request = $model->find($id);
+        if (!$request) {
+            return redirect()->to('admin/university-lecture-requests')->with('error', 'Lecture request not found.');
+        }
+        $status = $this->request->getPost('status');
+        $model->update($id, ['status' => $status, 'updated_at' => date('Y-m-d H:i:s')]);
+        return redirect()->to('admin/university-lecture-requests')->with('success', 'Lecture request status updated.');
+    }
+
+    public function universityRequestMatches()
+    {
+        $this->requireAdminAccess();
+        $this->ensureUniversityLectureRequestTrackingTables();
+
+        $perPage = 25;
+        $model = new \App\Models\UniversityLectureRequestModel();
+        $requests = $model->orderBy('created_at', 'DESC')->paginate($perPage);
+        $requests = $this->attachUniversityLectureAcceptanceSummaries($requests ?? []);
+
+        $db = Database::connect();
+        $totalsRow = $db->table('university_lecture_requests')
+            ->select('COUNT(*) as total_count,
+                      SUM(CASE WHEN status = "open" THEN 1 ELSE 0 END) as open_count,
+                      SUM(matched_tutor_count) as matched_total,
+                      SUM(emailed_tutor_count) as emailed_total')
+            ->get()
+            ->getRowArray();
+
+        $data = [
+            'title' => 'University Request Matches - TutorConnect Malawi',
+            'requests' => $requests,
+            'pager' => $model->pager,
+            'stats' => [
+                'total_count' => (int) ($totalsRow['total_count'] ?? 0),
+                'open_count' => (int) ($totalsRow['open_count'] ?? 0),
+                'matched_total' => (int) ($totalsRow['matched_total'] ?? 0),
+                'emailed_total' => (int) ($totalsRow['emailed_total'] ?? 0),
+                'accepted_total' => (int) $db->table('university_lecture_request_applications')->countAllResults(),
+            ],
+        ];
+
+        $data = $this->getAdminData($data);
+
+        return view('admin/university_request_matches', $data);
+    }
+
+    public function viewUniversityRequestMatch($id)
+    {
+        $this->requireAdminAccess();
+        $this->ensureUniversityLectureRequestTrackingTables();
+
+        $request = (new \App\Models\UniversityLectureRequestModel())->find((int) $id);
+
+        if (!$request) {
+            throw PageNotFoundException::forPageNotFound();
+        }
+
+        $matchedTutors = $this->findUniversityTutorsForRequest($request);
+        $acceptances = $this->getUniversityLectureAcceptances((int) $request['id']);
+        $acceptedTutorIds = array_flip(array_map('intval', array_column($acceptances, 'tutor_id')));
+
+        foreach ($matchedTutors as &$tutor) {
+            $tutor['service_areas'] = $this->universityCollegeTutorModel->decodeJsonList($tutor['service_areas_json'] ?? null);
+            $tutor['service_area_groups'] = $this->groupUniversityServiceAreas($tutor['service_areas']);
+            $tutor['has_accepted'] = isset($acceptedTutorIds[(int) ($tutor['id'] ?? 0)]);
+        }
+        unset($tutor);
+
+        $data = [
+            'title' => 'University Request ' . ($request['reference_code'] ?? '') . ' - TutorConnect Malawi',
+            'request' => $request,
+            'matchedTutors' => $matchedTutors,
+            'acceptances' => $acceptances,
+            'matchedNowCount' => count($matchedTutors),
+        ];
+
+        $data = $this->getAdminData($data);
+
+        return view('admin/view_university_request_match', $data);
+    }
+
+    public function exportUniversityLectureRequestsExcel()
+    {
+        $this->requireAdminAccess();
+        $this->ensureUniversityLectureRequestTrackingTables();
+        $model = new \App\Models\UniversityLectureRequestModel();
+        $requests = $model->orderBy('created_at', 'DESC')->findAll();
+        $requests = $this->attachUniversityLectureAcceptanceSummaries($requests);
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $headers = [
+            'No.', 'Full Name', 'Email', 'Phone', 'Institution', 'Service Category', 'Topic', 'Matched', 'Emailed', 'Accepted', 'Accepted Tutors', 'Status', 'Created At', 'Updated At'
+        ];
+        foreach ($headers as $colIndex => $header) {
+            $this->sheetSetValue($sheet, $colIndex + 1, 1, $header);
+        }
+        $row = 2;
+        $no = 1;
+        foreach ($requests as $req) {
+            $this->sheetSetValue($sheet, 1, $row, $no);
+            $this->sheetSetValue($sheet, 2, $row, (string)($req['full_name'] ?? ''));
+            $this->sheetSetValue($sheet, 3, $row, (string)($req['email'] ?? ''));
+            $this->sheetSetValue($sheet, 4, $row, (string)($req['phone'] ?? ''));
+            $this->sheetSetValue($sheet, 5, $row, (string)($req['institution'] ?? ''));
+            $this->sheetSetValue($sheet, 6, $row, (string)($req['service_category'] ?? ''));
+            $this->sheetSetValue($sheet, 7, $row, (string)($req['topic'] ?? ''));
+            $this->sheetSetValue($sheet, 8, $row, (int)($req['matched_tutor_count'] ?? 0));
+            $this->sheetSetValue($sheet, 9, $row, (int)($req['emailed_tutor_count'] ?? 0));
+            $this->sheetSetValue($sheet, 10, $row, (int)($req['accepted_tutor_count'] ?? 0));
+            $this->sheetSetValue($sheet, 11, $row, (string)($req['accepted_tutor_names'] ?? ''));
+            $this->sheetSetValue($sheet, 12, $row, (string)($req['status'] ?? ''));
+            $this->sheetSetValue($sheet, 13, $row, (string)($req['created_at'] ?? ''));
+            $this->sheetSetValue($sheet, 14, $row, (string)($req['updated_at'] ?? ''));
+            $row++;
+            $no++;
+        }
+        $sheet->freezePane('A2');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        ob_start();
+        $writer->save('php://output');
+        $binary = ob_get_clean();
+        $filename = 'university_lecture_requests_' . date('Ymd_His') . '.xlsx';
+        return $this->response
+            ->setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setHeader('Cache-Control', 'max-age=0')
+            ->setBody($binary);
+    }
+
+    public function exportUniversityLectureRequestsPdf()
+    {
+        $this->requireAdminAccess();
+        $this->ensureUniversityLectureRequestTrackingTables();
+        $model = new \App\Models\UniversityLectureRequestModel();
+        $requests = $model->orderBy('created_at', 'DESC')->findAll();
+        $requests = $this->attachUniversityLectureAcceptanceSummaries($requests);
+        $html = view('admin/university_lecture_requests_export_pdf', ['requests' => $requests]);
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+        $pdf = $dompdf->output();
+        $filename = 'university_lecture_requests_' . date('Ymd_His') . '.pdf';
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setHeader('Cache-Control', 'max-age=0')
+            ->setBody($pdf);
+    }
+
+    private function attachUniversityLectureAcceptanceSummaries(array $requests): array
+    {
+        if ($requests === []) {
+            return [];
+        }
+
+        $requestIds = array_values(array_filter(array_map(static fn ($request): int => (int) ($request['id'] ?? 0), $requests)));
+
+        if ($requestIds === []) {
+            return $requests;
+        }
+
+        $rows = \Config\Database::connect()
+            ->table('university_lecture_request_applications a')
+            ->select('a.university_lecture_request_id, a.accepted_at, t.full_name, t.email, t.phone')
+            ->join('university_college_tutors t', 't.id = a.university_tutor_id', 'left')
+            ->whereIn('a.university_lecture_request_id', $requestIds)
+            ->orderBy('a.accepted_at', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $requestId = (int) ($row['university_lecture_request_id'] ?? 0);
+            $name = trim((string) ($row['full_name'] ?? 'University Tutor'));
+            $email = trim((string) ($row['email'] ?? ''));
+            $phone = trim((string) ($row['phone'] ?? ''));
+            $grouped[$requestId][] = [
+                'name' => $name !== '' ? $name : 'University Tutor',
+                'email' => $email,
+                'phone' => $phone,
+                'accepted_at' => $row['accepted_at'] ?? null,
+            ];
+        }
+
+        foreach ($requests as &$request) {
+            $requestId = (int) ($request['id'] ?? 0);
+            $accepted = $grouped[$requestId] ?? [];
+            $request['accepted_tutor_count'] = count($accepted);
+            $request['accepted_tutor_names'] = implode(', ', array_map(static fn ($item): string => $item['name'], $accepted));
+        }
+        unset($request);
+
+        return $requests;
+    }
+
+    private function getUniversityLectureAcceptances(int $requestId): array
+    {
+        if ($requestId <= 0) {
+            return [];
+        }
+
+        return \Config\Database::connect()
+            ->table('university_lecture_request_applications a')
+            ->select('a.id, a.status, a.accepted_at, a.created_at, t.id AS tutor_id, t.full_name, t.email, t.phone, t.city_location, t.teaching_mode, t.profile_picture')
+            ->join('university_college_tutors t', 't.id = a.university_tutor_id', 'left')
+            ->where('a.university_lecture_request_id', $requestId)
+            ->orderBy('a.accepted_at', 'DESC')
+            ->get()
+            ->getResultArray();
+    }
+
+    private function findUniversityTutorsForRequest(array $request): array
+    {
+        $now = date('Y-m-d H:i:s');
+        $rows = Database::connect()
+            ->table('university_college_tutors uct')
+            ->select(
+                'uct.*, sp.name AS plan_name, sp.search_ranking, sp.badge_level, '
+                . 'sp.price_monthly AS plan_price, sp.sort_order AS plan_sort_order, '
+                . 'ts.current_period_end'
+            )
+            ->join('tutor_subscriptions ts', 'ts.user_id = uct.user_id', 'inner')
+            ->join('subscription_plans sp', 'sp.id = ts.plan_id', 'left')
+            ->where('uct.status', 'approved')
+            ->where('ts.status', 'active')
+            ->where('ts.current_period_start <=', $now)
+            ->where('ts.current_period_end >=', $now)
+            ->orderBy($this->universityPlanPrioritySql(), 'DESC', false)
+            ->orderBy('sp.sort_order', 'DESC')
+            ->orderBy('sp.price_monthly', 'DESC')
+            ->orderBy('uct.updated_at', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        $matches = [];
+        $seen = [];
+
+        foreach ($rows as $row) {
+            $tutorId = (int) ($row['id'] ?? 0);
+            if ($tutorId <= 0 || isset($seen[$tutorId])) {
+                continue;
+            }
+
+            $seen[$tutorId] = true;
+
+            if ($this->universityTutorMatchesRequest($request, $row)) {
+                $matches[] = $row;
+            }
+        }
+
+        return $matches;
+    }
+
+    private function universityTutorMatchesRequest(array $request, array $tutor): bool
+    {
+        $requestedMode = strtolower(trim((string) ($request['delivery_mode'] ?? '')));
+        $tutorMode = strtolower(trim((string) ($tutor['teaching_mode'] ?? '')));
+
+        if ($requestedMode !== '' && $tutorMode !== '' && !in_array('both', [$requestedMode, $tutorMode], true) && $requestedMode !== $tutorMode) {
+            return false;
+        }
+
+        $requestedServices = $this->requestUniversityServiceTokens($request);
+        if ($requestedServices === []) {
+            return true;
+        }
+
+        $tutorServices = array_map(
+            static fn ($item): string => strtolower(trim((string) $item)),
+            $this->universityCollegeTutorModel->decodeJsonList($tutor['service_areas_json'] ?? null)
+        );
+
+        if ($tutorServices === []) {
+            return false;
+        }
+
+        foreach ($requestedServices as $service) {
+            if (in_array($service, $tutorServices, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function requestUniversityServiceTokens(array $request): array
+    {
+        $services = [];
+        $category = trim((string) ($request['service_category'] ?? ''));
+        $topic = trim((string) ($request['topic'] ?? ''));
+
+        if ($topic !== '') {
+            $services[] = $topic;
+        }
+
+        if ($category !== '' && isset(self::UNIVERSITY_SERVICE_CATEGORIES[$category])) {
+            $services = array_merge($services, self::UNIVERSITY_SERVICE_CATEGORIES[$category]);
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($item): string => strtolower(trim((string) $item)),
+            $services
+        ))));
+    }
+
+    private function universityPlanPrioritySql(): string
+    {
+        return "CASE
+            WHEN LOWER(COALESCE(sp.search_ranking, '')) IN ('top', 'highest') THEN 5
+            WHEN LOWER(COALESCE(sp.search_ranking, '')) IN ('priority', 'high') THEN 4
+            WHEN LOWER(COALESCE(sp.badge_level, '')) IN ('master', 'premium') THEN 3
+            WHEN LOWER(COALESCE(sp.badge_level, '')) IN ('expert', 'standard') THEN 2
+            ELSE 1
+        END";
+    }
+
+    private function ensureUniversityLectureRequestTrackingTables(): void
+    {
+        $db = Database::connect();
+        $forge = Database::forge();
+
+        if (!$db->tableExists('university_lecture_requests')) {
+            $forge->addField([
+                'id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'auto_increment' => true],
+                'reference_code' => ['type' => 'VARCHAR', 'constraint' => 30],
+                'full_name' => ['type' => 'VARCHAR', 'constraint' => 150],
+                'email' => ['type' => 'VARCHAR', 'constraint' => 150],
+                'phone' => ['type' => 'VARCHAR', 'constraint' => 30],
+                'institution' => ['type' => 'VARCHAR', 'constraint' => 150],
+                'service_category' => ['type' => 'VARCHAR', 'constraint' => 80],
+                'topic' => ['type' => 'VARCHAR', 'constraint' => 255],
+                'delivery_mode' => ['type' => 'VARCHAR', 'constraint' => 20],
+                'city_location' => ['type' => 'VARCHAR', 'constraint' => 150],
+                'preferred_date' => ['type' => 'DATE', 'null' => true],
+                'preferred_time' => ['type' => 'VARCHAR', 'constraint' => 50, 'null' => true],
+                'budget_range' => ['type' => 'VARCHAR', 'constraint' => 100, 'null' => true],
+                'notes' => ['type' => 'TEXT', 'null' => true],
+                'status' => ['type' => 'VARCHAR', 'constraint' => 30, 'default' => 'open'],
+                'matched_tutor_count' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'default' => 0],
+                'emailed_tutor_count' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'default' => 0],
+                'created_at' => ['type' => 'DATETIME', 'null' => true],
+                'updated_at' => ['type' => 'DATETIME', 'null' => true],
+            ]);
+            $forge->addKey('id', true);
+            $forge->addUniqueKey('reference_code');
+            $forge->addKey('service_category');
+            $forge->addKey('delivery_mode');
+            $forge->addKey('status');
+            $forge->createTable('university_lecture_requests', true);
+        } else {
+            $missingColumns = [];
+
+            if (!$db->fieldExists('matched_tutor_count', 'university_lecture_requests')) {
+                $missingColumns['matched_tutor_count'] = ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'default' => 0];
+            }
+
+            if (!$db->fieldExists('emailed_tutor_count', 'university_lecture_requests')) {
+                $missingColumns['emailed_tutor_count'] = ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'default' => 0];
+            }
+
+            if ($missingColumns !== []) {
+                $forge->addColumn('university_lecture_requests', $missingColumns);
+            }
+        }
+
+        if (!$db->tableExists('university_lecture_request_applications')) {
+            $forge->addField([
+                'id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'auto_increment' => true],
+                'university_lecture_request_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
+                'university_tutor_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
+                'tutor_email' => ['type' => 'VARCHAR', 'constraint' => 150],
+                'status' => ['type' => 'VARCHAR', 'constraint' => 30, 'default' => 'accepted'],
+                'accepted_at' => ['type' => 'DATETIME', 'null' => true],
+                'created_at' => ['type' => 'DATETIME', 'null' => true],
+                'updated_at' => ['type' => 'DATETIME', 'null' => true],
+            ]);
+            $forge->addKey('id', true);
+            $forge->addKey('university_lecture_request_id');
+            $forge->addKey('university_tutor_id');
+            $forge->addKey('status');
+            $forge->addUniqueKey(['university_lecture_request_id', 'university_tutor_id']);
+            $forge->createTable('university_lecture_request_applications', true);
+        }
+    }
+// ...existing code...
 
     private function requireAdminAccess(): void
     {
@@ -99,29 +1205,108 @@ class Admin extends BaseController
         // Add unread message count
         $data = $this->getAdminData($data);
 
-        // Get all users for admin management
-        $data['all_users'] = $this->userModel->findAll();
-        $data['total_users'] = count($data['all_users']);
-        $data['active_users'] = count(array_filter($data['all_users'], function($user) {
+        $allUsers = $this->annotateAdminUserPortals(
+            $this->userModel->orderBy('created_at', 'DESC')->findAll()
+        );
+
+        $data['total_users'] = count($allUsers);
+        $data['active_users'] = count(array_filter($allUsers, function($user) {
             return $user['is_active'] == 1;
         }));
         $data['inactive_users'] = $data['total_users'] - $data['active_users'];
 
+        $regularTutorCount = count(array_filter($allUsers, function ($user) {
+            return ($user['role'] ?? '') === 'trainer' && ($user['admin_portal_type'] ?? '') !== 'university';
+        }));
+        $universityTutorCount = count(array_filter($allUsers, function ($user) {
+            return ($user['admin_portal_type'] ?? '') === 'university';
+        }));
+
         // Get user role breakdown
         $data['user_roles'] = [
-            'trainers' => count(array_filter($data['all_users'], function($user) {
-                return $user['role'] == 'trainer';
-            })),
-            'admins' => count(array_filter($data['all_users'], function($user) {
+            'trainers' => $regularTutorCount,
+            'university_tutors' => $universityTutorCount,
+            'admins' => count(array_filter($allUsers, function($user) {
                 return $user['role'] == 'admin';
             })),
-            'customers' => count(array_filter($data['all_users'], function($user) {
+            'customers' => count(array_filter($allUsers, function($user) {
                 return $user['role'] == 'customer';
             }))
         ];
 
+        $filters = [
+            'q' => trim((string) $this->request->getGet('q')),
+            'role' => trim((string) $this->request->getGet('role')),
+            'status' => trim((string) $this->request->getGet('status')),
+            'portal' => trim((string) $this->request->getGet('portal')),
+            'per_page' => (int) ($this->request->getGet('per_page') ?: 10),
+        ];
+        $filters['per_page'] = in_array($filters['per_page'], [10, 25, 50, 100], true) ? $filters['per_page'] : 10;
+
+        $filteredUsers = array_values(array_filter($allUsers, static function (array $user) use ($filters): bool {
+            if ($filters['role'] !== '' && (string) ($user['role'] ?? '') !== $filters['role']) {
+                return false;
+            }
+
+            if ($filters['status'] === 'active' && (int) ($user['is_active'] ?? 0) !== 1) {
+                return false;
+            }
+
+            if ($filters['status'] === 'inactive' && (int) ($user['is_active'] ?? 0) === 1) {
+                return false;
+            }
+
+            if ($filters['portal'] === 'university' && (string) ($user['admin_portal_type'] ?? '') !== 'university') {
+                return false;
+            }
+
+            if ($filters['portal'] === 'main' && (string) ($user['admin_portal_type'] ?? '') === 'university') {
+                return false;
+            }
+
+            if ($filters['q'] !== '') {
+                $haystack = strtolower(implode(' ', [
+                    $user['first_name'] ?? '',
+                    $user['last_name'] ?? '',
+                    $user['username'] ?? '',
+                    $user['email'] ?? '',
+                    $user['phone'] ?? '',
+                    $user['admin_role_label'] ?? '',
+                ]));
+
+                if (!str_contains($haystack, strtolower($filters['q']))) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
+
+        $page = max(1, (int) ($this->request->getGet('page') ?: 1));
+        $totalFiltered = count($filteredUsers);
+        $totalPages = max(1, (int) ceil($totalFiltered / $filters['per_page']));
+        $page = min($page, $totalPages);
+        $offset = ($page - 1) * $filters['per_page'];
+
+        $data['all_users'] = array_slice($filteredUsers, $offset, $filters['per_page']);
+        $data['filters'] = $filters;
+        $data['pager'] = [
+            'current_page' => $page,
+            'per_page' => $filters['per_page'],
+            'total' => $totalFiltered,
+            'total_pages' => $totalPages,
+            'offset' => $offset,
+        ];
+        $data['pagination_query'] = array_filter([
+            'q' => $filters['q'],
+            'role' => $filters['role'],
+            'status' => $filters['status'],
+            'portal' => $filters['portal'],
+            'per_page' => $filters['per_page'],
+        ], static fn ($value) => $value !== '');
+
         // Get recent users (last 10)
-        $data['recent_users'] = array_slice(array_reverse($data['all_users']), 0, 10);
+        $data['recent_users'] = array_slice($allUsers, 0, 10);
 
         return view('admin/users', $data);
     }
@@ -222,11 +1407,170 @@ class Admin extends BaseController
             ->setBody($pdf);
     }
 
+    public function updateUser($userId)
+    {
+        $this->requireAdminAccess();
+
+        if (strtolower($this->request->getMethod()) !== 'post') {
+            return redirect()->to('admin/users')->with('error', 'Invalid user update request.');
+        }
+
+        $userId = (int) $userId;
+        $user = $this->userModel->find($userId);
+        if (!$user) {
+            return redirect()->to('admin/users')->with('error', 'User not found.');
+        }
+
+        $role = trim((string) $this->request->getPost('role'));
+        $isSelf = $userId === (int) session()->get('user_id');
+        if ($isSelf) {
+            $role = (string) ($user['role'] ?? 'admin');
+        }
+        if (!in_array($role, ['admin', 'sub-admin', 'trainer', 'customer'], true)) {
+            return redirect()->to('admin/users')->with('error', 'Invalid user role selected.');
+        }
+
+        $email = strtolower(trim((string) $this->request->getPost('email')));
+        $username = trim((string) $this->request->getPost('username'));
+        $phone = trim((string) $this->request->getPost('phone'));
+
+        $validation = \Config\Services::validation();
+        $validation->setRules([
+            'first_name' => 'required|min_length[2]|max_length[100]',
+            'last_name' => 'required|min_length[2]|max_length[100]',
+            'email' => 'required|valid_email|max_length[150]',
+            'username' => 'required|min_length[3]|max_length[100]|alpha_dash',
+            'phone' => 'permit_empty|max_length[20]',
+            'role' => 'required|in_list[admin,sub-admin,trainer,customer]',
+        ]);
+
+        if (!$validation->withRequest($this->request)->run()) {
+            return redirect()->to('admin/users')->with('error', implode(' ', $validation->getErrors()));
+        }
+
+        $emailOwner = $this->userModel->where('email', $email)->where('id !=', $userId)->first();
+        if ($emailOwner) {
+            return redirect()->to('admin/users')->with('error', 'That email address is already assigned to another user.');
+        }
+
+        $usernameOwner = $this->userModel->where('username', $username)->where('id !=', $userId)->first();
+        if ($usernameOwner) {
+            return redirect()->to('admin/users')->with('error', 'That username is already assigned to another user.');
+        }
+
+        if ($phone !== '') {
+            $phoneOwner = $this->userModel->where('phone', $phone)->where('id !=', $userId)->first();
+            if ($phoneOwner) {
+                return redirect()->to('admin/users')->with('error', 'That phone number is already assigned to another user.');
+            }
+        }
+
+        $updated = $this->userModel->skipValidation(true)->update($userId, [
+            'first_name' => trim((string) $this->request->getPost('first_name')),
+            'last_name' => trim((string) $this->request->getPost('last_name')),
+            'email' => $email,
+            'username' => $username,
+            'phone' => $phone ?: null,
+            'role' => $role,
+            'is_active' => $isSelf ? 1 : ($this->request->getPost('is_active') ? 1 : 0),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        if (!$updated) {
+            return redirect()->to('admin/users')->with('error', 'Could not update the user account.');
+        }
+
+        return redirect()->to('admin/users')->with('success', 'User account updated successfully.');
+    }
+
+    public function toggleUserStatus($userId)
+    {
+        $this->requireAdminAccess();
+
+        if (strtolower($this->request->getMethod()) !== 'post') {
+            return redirect()->to('admin/users')->with('error', 'Invalid status update request.');
+        }
+
+        $userId = (int) $userId;
+        if ($userId === (int) session()->get('user_id')) {
+            return redirect()->to('admin/users')->with('error', 'You cannot deactivate your own account.');
+        }
+
+        $user = $this->userModel->find($userId);
+        if (!$user) {
+            return redirect()->to('admin/users')->with('error', 'User not found.');
+        }
+
+        $newStatus = ((int) ($user['is_active'] ?? 0)) === 1 ? 0 : 1;
+        if (!$this->userModel->skipValidation(true)->update($userId, [
+            'is_active' => $newStatus,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ])) {
+            return redirect()->to('admin/users')->with('error', 'Could not update user status.');
+        }
+
+        return redirect()->to('admin/users')->with('success', $newStatus === 1 ? 'User account activated.' : 'User account deactivated.');
+    }
+
+    public function deleteUser($userId)
+    {
+        $this->requireAdminAccess();
+
+        if (strtolower($this->request->getMethod()) !== 'post') {
+            return redirect()->to('admin/users')->with('error', 'Invalid delete request.');
+        }
+
+        $userId = (int) $userId;
+        if ($userId === (int) session()->get('user_id')) {
+            return redirect()->to('admin/users')->with('error', 'You cannot delete your own account.');
+        }
+
+        $user = $this->userModel->find($userId);
+        if (!$user) {
+            return redirect()->to('admin/users')->with('error', 'User not found.');
+        }
+
+        $db = Database::connect();
+        $profile = $this->findUniversityProfileForUser($user);
+
+        try {
+            $db->transBegin();
+
+            $this->tutorSubscriptionModel->where('user_id', $userId)->delete();
+
+            if ($profile) {
+                $this->universityCollegeTutorModel->delete((int) $profile['id']);
+            }
+
+            if (!$this->userModel->delete($userId)) {
+                throw new \RuntimeException('Could not delete user account.');
+            }
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('User delete transaction failed.');
+            }
+
+            $db->transCommit();
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            log_message('error', 'Admin user delete failed: ' . $e->getMessage());
+
+            return redirect()->to('admin/users')->with('error', 'Could not delete the user account.');
+        }
+
+        if ($profile) {
+            $this->deleteUniversityTutorFiles($profile);
+            $this->universityTutorLookup = null;
+        }
+
+        return redirect()->to('admin/users')->with('success', 'User account deleted successfully.');
+    }
+
     public function exportTutorsExcel()
     {
         $this->requireAdminAccess();
 
-        $tutors = $this->userModel->where('role', 'trainer')->orderBy('created_at', 'DESC')->findAll();
+        $tutors = $this->getRegularTutors();
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -292,7 +1636,7 @@ class Admin extends BaseController
     {
         $this->requireAdminAccess();
 
-        $tutors = $this->userModel->where('role', 'trainer')->orderBy('created_at', 'DESC')->findAll();
+        $tutors = $this->getRegularTutors();
 
         $html = view('admin/trainers_export_pdf', [
             'tutors' => $tutors,
@@ -570,14 +1914,17 @@ class Admin extends BaseController
     public function trainers()
     {
         $data = [
-            'title' => 'Trainer Management - TutorConnect Malawi',
+            'title' => 'Regular Tutor Management - TutorConnect Malawi',
         ];
 
-        // Get all trainers from consolidated users table
-        $trainers = $this->userModel->where('role', 'trainer')->findAll();
+        $data = $this->getAdminData($data);
+
+        $trainers = $this->getRegularTutors();
+        $universityTutorCount = count($this->universityCollegeTutorModel->findAll());
 
         $data['trainers'] = $trainers;
         $data['total_trainers'] = count($trainers);
+        $data['university_tutor_count'] = $universityTutorCount;
 
         // Count active trainers (both approved AND not pending status)
         $data['active_trainers'] = count(array_filter($trainers, function($trainer) {
@@ -614,7 +1961,8 @@ class Admin extends BaseController
             'avg_rating' => round(array_sum(array_column($trainers, 'rating')) / max(1, $data['total_trainers']), 1),
             'pending_verification' => count(array_filter($trainers, function($trainer) {
                 return $trainer['tutor_status'] === 'pending';
-            }))
+            })),
+            'university_tutors' => $universityTutorCount,
         ];
 
         return view('admin/trainers', $data);
@@ -623,7 +1971,15 @@ class Admin extends BaseController
     // View tutor details - now from consolidated users table
     public function viewTutor($userId)
     {
-        $tutor = $this->userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId);
+        if (!empty($target['university_profile'])) {
+            return $this->redirectUniversityTutorManagement(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and is managed separately.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             return redirect()->to('admin/trainers')->with('error', 'Tutor not found.');
         }
@@ -729,7 +2085,15 @@ class Admin extends BaseController
         // }
 
         log_message('info', 'approveTutor: POST method confirmed, looking up tutor...');
-        $tutor = $this->userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and must be approved from its own admin page.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             log_message('error', 'approveTutor: Tutor not found, userId: ' . $userId);
             if ($this->request->isAJAX()) {
@@ -947,7 +2311,15 @@ info@tutorconnectmw.com | +265 992 313 978";
             return redirect()->to('admin/trainers');
         }
 
-        $tutor = $this->userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and must be reviewed from its own admin page.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             if ($this->request->isAJAX()) {
                 return $this->response->setJSON(['success' => false, 'message' => 'Tutor not found.']);
@@ -991,7 +2363,15 @@ info@tutorconnectmw.com | +265 992 313 978";
         // }
 
         log_message('info', 'suspendTutor: POST method confirmed, looking up tutor...');
-        $tutor = $this->userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and is managed separately.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             log_message('error', 'suspendTutor: Tutor not found, userId: ' . $userId);
             return redirect()->to('admin/trainers')->with('error', 'Tutor not found.');
@@ -1018,7 +2398,15 @@ info@tutorconnectmw.com | +265 992 313 978";
         //     return redirect()->to('admin/trainers');
         // }
 
-        $tutor = $this->userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and is managed separately.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             return redirect()->to('admin/trainers')->with('error', 'Tutor not found.');
         }
@@ -1041,7 +2429,15 @@ info@tutorconnectmw.com | +265 992 313 978";
         $this->requireAdminAccess();
         log_message('info', 'Admin access verified for deleteTutorPermanently');
 
-        $tutor = $this->userModel->withDeleted()->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId, true);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and must be managed from its own admin page.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             return redirect()->to('admin/trainers')->with('error', 'Tutor not found.');
         }
@@ -1124,7 +2520,15 @@ info@tutorconnectmw.com | +265 992 313 978";
         $this->requireAdminAccess();
         log_message('info', 'Admin access verified for restoreTutor');
 
-        $tutor = $this->userModel->withDeleted()->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId, true);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and is restored from its own admin page.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             return redirect()->to('admin/trainers')->with('error', 'Tutor not found.');
         }
@@ -1174,7 +2578,15 @@ info@tutorconnectmw.com | +265 992 313 978";
         $this->requireAdminAccess();
         log_message('info', 'Admin access verified for deleteTutor');
 
-        $tutor = $this->userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'This account belongs to the University Tutors portal and must be managed from its own admin page.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             return redirect()->to('admin/trainers')->with('error', 'Tutor not found.');
         }
@@ -1279,7 +2691,15 @@ info@tutorconnectmw.com | +265 992 313 978";
         //     return $this->response->setJSON(['success' => false, 'message' => 'Invalid request method.']);
         // }
 
-        $tutor = $this->userModel->where('id', $userId)->where('role', 'trainer')->first();
+        $target = $this->resolveTutorManagementTarget((int) $userId);
+        if (!empty($target['university_profile'])) {
+            return $this->respondUniversityTutorManagementRedirect(
+                $target['university_profile'],
+                'Document review for this account is handled from the University Tutors admin page.'
+            );
+        }
+
+        $tutor = $target['tutor'];
         if (!$tutor) {
             return $this->response->setJSON(['success' => false, 'message' => 'Tutor not found.']);
         }
@@ -1533,17 +2953,57 @@ info@tutorconnectmw.com | +265 992 313 978";
     }
 
     // Subscription Plans Management
-    public function subscriptions()
+    public function subscriptions(string $portalType = 'trainer')
     {
+        $portalType = $this->normalizePlanPortalType($portalType);
+        $portalLabel = $portalType === 'university' ? 'University Tutors' : 'Tutors';
+
         $data = [
-            'title' => 'Subscription Plans Management - TutorConnect Malawi',
+            'title' => $portalLabel . ' Subscription Plans Management - TutorConnect Malawi',
+            'portal_type' => $portalType,
+            'portal_label' => $portalLabel,
+            'plans_url' => $portalType === 'university' ? site_url('admin/university-subscriptions') : site_url('admin/subscriptions'),
+            'add_plan_url' => $portalType === 'university' ? site_url('admin/university-subscriptions/add') : site_url('admin/subscriptions/add'),
+            'edit_plan_base_url' => $portalType === 'university' ? site_url('admin/university-subscriptions/edit/') : site_url('admin/subscriptions/edit/'),
+            'delete_plan_base_url' => $portalType === 'university' ? site_url('admin/university-subscriptions/delete/') : site_url('admin/subscriptions/delete/'),
+            'other_plans_url' => $portalType === 'university' ? site_url('admin/subscriptions') : site_url('admin/university-subscriptions'),
+            'other_portal_label' => $portalType === 'university' ? 'Tutor Plans' : 'University Plans',
+            'university_users' => [],
         ];
 
         // Get all subscription plans
-        $data['plans'] = $this->subscriptionPlanModel->orderBy('sort_order', 'ASC')->findAll();
+        $data['plans'] = $this->subscriptionPlanModel->getPlansForPortal($portalType);
         $data['total_plans'] = count($data['plans']);
         $data['active_plans'] = count(array_filter($data['plans'], function($plan) {
             return $plan['is_active'] == 1;
+        }));
+
+        $subscriptionRows = array_map(function (array $subscription): array {
+            return $this->annotateSubscriptionPortal(
+                $this->normalizeSubscriptionDisplayState($subscription)
+            );
+        }, $this->tutorSubscriptionModel->getAllWithDetails());
+
+        $planUsage = $this->buildSubscriptionPlanUsage($subscriptionRows);
+        $data['plans'] = array_map(function (array $plan) use ($planUsage): array {
+            $usage = $planUsage[(int) ($plan['id'] ?? 0)] ?? [
+                'total_subscriptions' => 0,
+                'active_subscriptions' => 0,
+                'regular_subscriptions' => 0,
+                'regular_active_subscriptions' => 0,
+                'university_subscriptions' => 0,
+                'university_active_subscriptions' => 0,
+            ];
+
+            return array_merge($plan, $usage);
+        }, $data['plans']);
+
+        $regularActiveSubscribers = count(array_filter($subscriptionRows, static function (array $subscription): bool {
+            return ($subscription['portal_type'] ?? '') !== 'university' && !empty($subscription['is_currently_active']);
+        }));
+
+        $universityActiveSubscribers = count(array_filter($subscriptionRows, static function (array $subscription): bool {
+            return ($subscription['portal_type'] ?? '') === 'university' && !empty($subscription['is_currently_active']);
         }));
 
         // Get subscription statistics
@@ -1552,23 +3012,61 @@ info@tutorconnectmw.com | +265 992 313 978";
             'active_plans' => $data['active_plans'],
             'inactive_plans' => $data['total_plans'] - $data['active_plans'],
             'total_revenue_potential' => array_sum(array_column($data['plans'], 'price_monthly')),
+            'regular_active_subscribers' => $regularActiveSubscribers,
+            'university_active_subscribers' => $universityActiveSubscribers,
         ];
+
+        if ($portalType === 'university') {
+            $universityProfiles = $this->universityCollegeTutorModel
+                ->orderBy('created_at', 'DESC')
+                ->findAll();
+
+            $data['university_users'] = array_map(function (array $profile): array {
+                $profile = $this->attachUniversityTutorAccountMeta($profile);
+
+                return [
+                    'id' => (int) ($profile['id'] ?? 0),
+                    'full_name' => (string) ($profile['full_name'] ?? ''),
+                    'email' => (string) ($profile['email'] ?? ''),
+                    'reference_code' => (string) ($profile['reference_code'] ?? ''),
+                    'status' => (string) ($profile['status'] ?? 'pending_review'),
+                    'subscription_plan' => (string) ($profile['linked_subscription_plan'] ?? ''),
+                    'created_at' => (string) ($profile['created_at'] ?? ''),
+                ];
+            }, $universityProfiles);
+        }
 
         return view('admin/subscriptions', $data);
     }
 
-    // Add new subscription plan form
-    public function addPlan()
+    public function universitySubscriptions()
     {
+        return $this->subscriptions('university');
+    }
+
+    // Add new subscription plan form
+    public function addPlan(string $portalType = 'trainer')
+    {
+        $portalType = $this->normalizePlanPortalType($portalType);
+        $portalLabel = $portalType === 'university' ? 'University Tutors' : 'Tutors';
         $data = [
-            'title' => 'Add Subscription Plan - TutorConnect Malawi',
+            'title' => 'Add ' . $portalLabel . ' Subscription Plan - TutorConnect Malawi',
+            'portal_type' => $portalType,
+            'portal_label' => $portalLabel,
+            'plans_url' => $portalType === 'university' ? site_url('admin/university-subscriptions') : site_url('admin/subscriptions'),
+            'create_plan_url' => $portalType === 'university' ? site_url('admin/university-subscriptions/create') : site_url('admin/subscriptions/create'),
         ];
 
         return view('admin/add_subscription_plan', $data);
     }
 
+    public function addUniversityPlan()
+    {
+        return $this->addPlan('university');
+    }
+
     // Edit subscription plan form
-    public function editPlan($planId)
+    public function editPlan($planId, ?string $portalType = null)
     {
         $plan = $this->subscriptionPlanModel->find($planId);
 
@@ -1576,12 +3074,24 @@ info@tutorconnectmw.com | +265 992 313 978";
             return redirect()->to('admin/subscriptions')->with('error', 'Subscription plan not found.');
         }
 
+        $portalType = $this->normalizePlanPortalType($portalType ?? ($plan['portal_type'] ?? 'trainer'));
+        $portalLabel = $portalType === 'university' ? 'University Tutors' : 'Tutors';
+
         $data = [
-            'title' => 'Edit Subscription Plan - TutorConnect Malawi',
+            'title' => 'Edit ' . $portalLabel . ' Subscription Plan - TutorConnect Malawi',
             'plan' => $plan,
+            'portal_type' => $portalType,
+            'portal_label' => $portalLabel,
+            'plans_url' => $portalType === 'university' ? site_url('admin/university-subscriptions') : site_url('admin/subscriptions'),
+            'update_plan_url' => $portalType === 'university' ? site_url('admin/university-subscriptions/update/' . $planId) : site_url('admin/subscriptions/update/' . $planId),
         ];
 
         return view('admin/edit_subscription_plan', $data);
+    }
+
+    public function editUniversityPlan($planId)
+    {
+        return $this->editPlan($planId, 'university');
     }
 
     // Create new subscription plan
@@ -1624,6 +3134,7 @@ info@tutorconnectmw.com | +265 992 313 978";
             'name' => $this->request->getPost('name'),
             'description' => $this->request->getPost('description'),
             'price_monthly' => $this->request->getPost('price_monthly'),
+            'portal_type' => $this->normalizePlanPortalType($this->request->getPost('portal_type')),
             'max_profile_views' => $this->request->getPost('max_profile_views'),
             'max_clicks' => $this->request->getPost('max_clicks'),
             'max_subjects' => $this->request->getPost('max_subjects'),
@@ -1635,6 +3146,11 @@ info@tutorconnectmw.com | +265 992 313 978";
             'allow_video_upload' => $this->request->getPost('allow_video_upload') ? 1 : 0,
             'allow_pdf_upload' => $this->request->getPost('allow_pdf_upload') ? 1 : 0,
             'allow_announcements' => $this->request->getPost('allow_announcements') ? 1 : 0,
+            'allow_video_solution' => $this->request->getPost('allow_video_solution') ? 1 : 0,
+            'features' => json_encode([
+                'included' => $this->normalizePlanFeatureEntries($this->request->getPost('custom_included_features')),
+                'not_included' => $this->normalizePlanFeatureEntries($this->request->getPost('custom_not_included_features')),
+            ]),
             'is_active' => $this->request->getPost('is_active') ? 1 : 0,
             'sort_order' => $this->request->getPost('sort_order'),
         ];
@@ -1647,10 +3163,10 @@ info@tutorconnectmw.com | +265 992 313 978";
                     return $this->response->setJSON([
                         'success' => true,
                         'message' => 'Subscription plan created successfully!',
-                        'redirect' => site_url('admin/subscriptions')
+                        'redirect' => site_url($this->planAdminUrlForPortal($data['portal_type']))
                     ]);
                 }
-                return redirect()->to('admin/subscriptions')->with('success', 'Subscription plan created successfully!');
+                return redirect()->to($this->planAdminUrlForPortal($data['portal_type']))->with('success', 'Subscription plan created successfully!');
             } else {
                 log_message('error', 'Subscription plan creation failed: Database insert returned false for plan "' . $data['name'] . '"');
                 if ($isAjax) {
@@ -1713,6 +3229,7 @@ info@tutorconnectmw.com | +265 992 313 978";
             'name' => $this->request->getPost('name'),
             'description' => $this->request->getPost('description'),
             'price_monthly' => $this->request->getPost('price_monthly'),
+            'portal_type' => $this->normalizePlanPortalType($this->request->getPost('portal_type')),
             'max_profile_views' => $this->request->getPost('max_profile_views'),
             'max_clicks' => $this->request->getPost('max_clicks'),
             'max_subjects' => $this->request->getPost('max_subjects'),
@@ -1724,6 +3241,11 @@ info@tutorconnectmw.com | +265 992 313 978";
             'allow_video_upload' => $this->request->getPost('allow_video_upload') ? 1 : 0,
             'allow_pdf_upload' => $this->request->getPost('allow_pdf_upload') ? 1 : 0,
             'allow_announcements' => $this->request->getPost('allow_announcements') ? 1 : 0,
+            'allow_video_solution' => $this->request->getPost('allow_video_solution') ? 1 : 0,
+            'features' => json_encode([
+                'included' => $this->normalizePlanFeatureEntries($this->request->getPost('custom_included_features')),
+                'not_included' => $this->normalizePlanFeatureEntries($this->request->getPost('custom_not_included_features')),
+            ]),
             'is_active' => $this->request->getPost('is_active') ? 1 : 0,
             'sort_order' => $this->request->getPost('sort_order'),
         ];
@@ -1735,10 +3257,10 @@ info@tutorconnectmw.com | +265 992 313 978";
                     return $this->response->setJSON([
                         'success' => true,
                         'message' => 'Subscription plan updated successfully!',
-                        'redirect' => site_url('admin/subscriptions')
+                        'redirect' => site_url($this->planAdminUrlForPortal($data['portal_type']))
                     ]);
                 }
-                return redirect()->to('admin/subscriptions')->with('success', 'Subscription plan updated successfully!');
+                return redirect()->to($this->planAdminUrlForPortal($data['portal_type']))->with('success', 'Subscription plan updated successfully!');
             } else {
                 log_message('error', 'Subscription plan update failed: Database update returned false for plan ID ' . $planId . ', Name="' . $data['name'] . '"');
                 if ($isAjax) {
@@ -1761,6 +3283,27 @@ info@tutorconnectmw.com | +265 992 313 978";
         }
     }
 
+    private function normalizePlanFeatureEntries($value): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', (string) $value) ?: [];
+        $lines = array_map(static fn ($line) => trim((string) $line), $lines);
+        $lines = array_filter($lines, static fn ($line) => $line !== '');
+
+        return array_values(array_unique($lines));
+    }
+
+    private function normalizePlanPortalType(?string $portalType): string
+    {
+        return $portalType === 'university' ? 'university' : 'trainer';
+    }
+
+    private function planAdminUrlForPortal(?string $portalType): string
+    {
+        return $this->normalizePlanPortalType($portalType) === 'university'
+            ? 'admin/university-subscriptions'
+            : 'admin/subscriptions';
+    }
+
     // Get subscription plan data (for AJAX editing)
     public function getPlan($planId)
     {
@@ -1780,60 +3323,77 @@ info@tutorconnectmw.com | +265 992 313 978";
         log_message('info', '=== DELETE PLAN ATTEMPT ===');
         log_message('info', 'Plan ID: ' . $planId);
         log_message('info', 'Method: ' . $this->request->getMethod());
+        $plan = $this->subscriptionPlanModel->find($planId);
+        $redirectUrl = $this->planAdminUrlForPortal($plan['portal_type'] ?? 'trainer');
 
         if (strtolower($this->request->getMethod()) != 'post') {
             log_message('error', 'deletePlan: Not a POST request, redirecting');
-            return redirect()->to('admin/subscriptions');
+            return redirect()->to($redirectUrl);
         }
 
         // Check if plan has active subscriptions
         $this->tutorSubscriptionModel->markExpiredSubscriptions();
         $activeSubscriptions = $this->tutorSubscriptionModel->where('plan_id', $planId)->where('status', 'active')->countAllResults();
         if ($activeSubscriptions > 0) {
-            return redirect()->to('admin/subscriptions')->with('error', 'Cannot delete plan with active subscriptions.');
+            return redirect()->to($redirectUrl)->with('error', 'Cannot delete plan with active subscriptions.');
         }
 
         if ($this->subscriptionPlanModel->delete($planId)) {
-            return redirect()->to('admin/subscriptions')->with('success', 'Subscription plan deleted successfully!');
+            return redirect()->to($redirectUrl)->with('success', 'Subscription plan deleted successfully!');
         }
 
-        return redirect()->to('admin/subscriptions')->with('error', 'Failed to delete subscription plan.');
+        return redirect()->to($redirectUrl)->with('error', 'Failed to delete subscription plan.');
+    }
+
+    public function deleteUniversityPlan($planId)
+    {
+        return $this->deletePlan($planId);
     }
 
     // Tutor Subscriptions Management
-    public function tutorSubscriptions()
+    public function tutorSubscriptions(string $portalType = 'trainer')
     {
+        $portalType = $this->normalizePlanPortalType($portalType);
+        $portalLabel = $portalType === 'university' ? 'University Tutor' : 'Tutor';
         $data = [
-            'title' => 'Tutor Subscriptions Management - TutorConnect Malawi',
+            'title' => $portalLabel . ' Subscriptions Management - TutorConnect Malawi',
+            'portal_type' => $portalType,
+            'portal_label' => $portalLabel,
+            'subscription_url' => $portalType === 'university' ? site_url('admin/university-tutor-subscriptions') : site_url('admin/tutor-subscriptions'),
+            'other_subscription_url' => $portalType === 'university' ? site_url('admin/tutor-subscriptions') : site_url('admin/university-tutor-subscriptions'),
+            'other_subscription_label' => $portalType === 'university' ? 'Tutor Subscriptions' : 'University Subscriptions',
         ];
 
         // Get all tutor subscriptions with details
-        $data['subscriptions'] = $this->tutorSubscriptionModel->getAllWithDetails();
-        $now = time();
+        $data['subscriptions'] = array_map(function (array $subscription): array {
+            return $this->annotateSubscriptionPortal(
+                $this->normalizeSubscriptionDisplayState($subscription)
+            );
+        }, $this->tutorSubscriptionModel->getAllWithDetails());
 
-        $data['subscriptions'] = array_map(function ($subscription) use ($now) {
-            $startTime = !empty($subscription['current_period_start']) ? strtotime($subscription['current_period_start']) : null;
-            $endTime = !empty($subscription['current_period_end']) ? strtotime($subscription['current_period_end']) : null;
-
-            $subscription['display_status'] = $subscription['status'];
-            $subscription['is_currently_active'] = $subscription['status'] === 'active'
-                && ($startTime === null || $startTime <= $now)
-                && ($endTime === null || $endTime >= $now);
-
-            if ($subscription['status'] === 'active' && $startTime !== null && $startTime > $now) {
-                $subscription['display_status'] = 'scheduled';
-                $subscription['is_currently_active'] = false;
-            } elseif ($subscription['status'] === 'active' && $endTime !== null && $endTime < $now) {
-                $subscription['display_status'] = 'expired';
-                $subscription['is_currently_active'] = false;
+        $data['subscriptions'] = array_values(array_filter($data['subscriptions'], static function (array $subscription) use ($portalType): bool {
+            if ($portalType === 'university') {
+                return ($subscription['portal_type'] ?? '') === 'university';
             }
 
-            return $subscription;
-        }, $data['subscriptions']);
+            return ($subscription['portal_type'] ?? '') !== 'university';
+        }));
 
         $data['total_subscriptions'] = count($data['subscriptions']);
         $data['active_subscriptions'] = count(array_filter($data['subscriptions'], function($sub) {
             return !empty($sub['is_currently_active']);
+        }));
+        $data['regular_subscriptions'] = count(array_filter($data['subscriptions'], static function ($sub) {
+            return ($sub['portal_type'] ?? '') !== 'university';
+        }));
+        $data['university_subscriptions'] = count(array_filter($data['subscriptions'], static function ($sub) {
+            return ($sub['portal_type'] ?? '') === 'university';
+        }));
+        $data['regular_active_subscriptions'] = count(array_filter($data['subscriptions'], static function ($sub) {
+            return ($sub['portal_type'] ?? '') !== 'university' && !empty($sub['is_currently_active']);
+        }));
+        $data['university_active_subscriptions'] = count(array_filter($data['subscriptions'], static function ($sub) {
+            return ($sub['portal_type'] ?? '') === 'university' && !empty($sub['is_currently_active']);
         }));
 
         // Debug logging
@@ -1853,21 +3413,31 @@ info@tutorconnectmw.com | +265 992 313 978";
             'total_subscriptions' => $data['total_subscriptions'],
             'active_subscriptions' => $data['active_subscriptions'],
             'inactive_subscriptions' => count(array_filter($data['subscriptions'], function($sub) {
-                return ($sub['display_status'] ?? $sub['status']) === 'inactive';
+                return empty($sub['is_currently_active']);
             })),
             'cancelled_subscriptions' => count(array_filter($data['subscriptions'], function($sub) {
                 return ($sub['display_status'] ?? $sub['status']) === 'cancelled';
             })),
             'total_monthly_revenue' => $totalMonthlyRevenue,
+            'regular_subscriptions' => $data['regular_subscriptions'],
+            'university_subscriptions' => $data['university_subscriptions'],
+            'regular_active_subscriptions' => $data['regular_active_subscriptions'],
+            'university_active_subscriptions' => $data['university_active_subscriptions'],
         ];
 
         log_message('info', 'Revenue calculation: ' . $totalMonthlyRevenue);
         log_message('info', 'Stats: ' . json_encode($data['stats']));
 
         // Get available plans for dropdown
-        $data['available_plans'] = $this->subscriptionPlanModel->getActivePlans();
+        $data['available_plans'] = $this->subscriptionPlanModel->getActivePlansForPortal($portalType);
+        $data['assignable_tutors'] = $this->getAssignableSubscriptionTutors($data['subscriptions'], $portalType);
 
         return view('admin/tutor_subscriptions', $data);
+    }
+
+    public function universityTutorSubscriptions()
+    {
+        return $this->tutorSubscriptions('university');
     }
 
     public function renewalManagement()
@@ -2074,6 +3644,9 @@ info@tutorconnectmw.com | +265 992 313 978";
 
         $userId = $this->request->getPost('user_id');
         $planId = $this->request->getPost('plan_id');
+        $selectedUser = $this->userModel->find((int) $userId);
+        $userPortalType = $selectedUser && $this->isUniversityTutorAccount($selectedUser) ? 'university' : 'trainer';
+        $redirectUrl = $userPortalType === 'university' ? 'admin/university-tutor-subscriptions' : 'admin/tutor-subscriptions';
 
         // Check if user already has an active subscription
         $existingSubscription = $this->tutorSubscriptionModel->getActiveSubscription($userId);
@@ -2085,6 +3658,10 @@ info@tutorconnectmw.com | +265 992 313 978";
         $plan = $this->subscriptionPlanModel->find($planId);
         if (!$plan || $plan['is_active'] != 1) {
             return redirect()->back()->with('error', 'Invalid or inactive subscription plan.')->withInput();
+        }
+
+        if ($this->normalizePlanPortalType($plan['portal_type'] ?? 'trainer') !== $userPortalType) {
+            return redirect()->back()->with('error', 'That plan belongs to a different portal.')->withInput();
         }
 
         // Create new subscription
@@ -2100,7 +3677,7 @@ info@tutorconnectmw.com | +265 992 313 978";
 
         if ($this->tutorSubscriptionModel->insert($subscriptionData)) {
             $this->tutorSubscriptionModel->syncUserSubscriptionState((int) $userId);
-            return redirect()->to('admin/tutor_subscriptions')->with('success', 'Subscription assigned successfully!');
+            return redirect()->to($redirectUrl)->with('success', 'Subscription assigned successfully!');
         }
 
         return redirect()->back()->with('error', 'Failed to assign subscription.')->withInput();

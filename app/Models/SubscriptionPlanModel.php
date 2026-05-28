@@ -16,7 +16,7 @@ class SubscriptionPlanModel extends Model
         'name', 'description', 'price_monthly', 'max_profile_views', 'max_clicks',
         'max_subjects', 'district_spotlight_days', 'badge_level', 'search_ranking',
         'show_whatsapp', 'email_marketing_access', 'allow_video_upload', 'allow_pdf_upload',
-        'allow_announcements', 'allow_video_solution', 'is_active', 'sort_order'
+        'allow_announcements', 'allow_video_solution', 'features', 'portal_type', 'is_active', 'sort_order'
     ];
 
     protected bool $allowEmptyInserts = false;
@@ -55,7 +55,41 @@ class SubscriptionPlanModel extends Model
     // Get active plans ordered by sort_order
     public function getActivePlans()
     {
-        return $this->where('is_active', 1)->orderBy('sort_order', 'ASC')->findAll();
+        return $this->getActivePlansForPortal('trainer');
+    }
+
+    public function getActivePlansForPortal(string $portalType = 'trainer')
+    {
+        return $this->plansForPortalQuery($portalType)
+            ->where('is_active', 1)
+            ->orderBy('sort_order', 'ASC')
+            ->findAll();
+    }
+
+    public function getPlansForPortal(string $portalType = 'trainer')
+    {
+        return $this->plansForPortalQuery($portalType)
+            ->orderBy('sort_order', 'ASC')
+            ->findAll();
+    }
+
+    public function normalizePortalType(?string $portalType): string
+    {
+        return $portalType === 'university' ? 'university' : 'trainer';
+    }
+
+    private function plansForPortalQuery(string $portalType): self
+    {
+        $portalType = $this->normalizePortalType($portalType);
+
+        if ($portalType === 'trainer') {
+            return $this->groupStart()
+                ->where('portal_type', 'trainer')
+                ->orWhere('portal_type', null)
+                ->groupEnd();
+        }
+
+        return $this->where('portal_type', 'university');
     }
 
     // Get plan with features as array

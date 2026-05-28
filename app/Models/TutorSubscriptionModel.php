@@ -57,15 +57,27 @@ class TutorSubscriptionModel extends Model
         return date('Y-m-d H:i:s');
     }
 
+    public function getMaxBillingMonths(): int
+    {
+        $configured = (int) (getenv('SUBSCRIPTION_MAX_BILLING_MONTHS') ?: 120);
+
+        if ($configured < 1) {
+            return 1;
+        }
+
+        return min($configured, 1200);
+    }
+
     public function normalizeBillingMonths($months): int
     {
         $months = (int) $months;
+        $maxBillingMonths = $this->getMaxBillingMonths();
 
         if ($months < 1) {
             return 1;
         }
 
-        return min($months, 120);
+        return min($months, $maxBillingMonths);
     }
 
     public function calculatePeriodEnd(string $startDate, int $billingMonths = 1): string
@@ -108,6 +120,40 @@ class TutorSubscriptionModel extends Model
         }
 
         return count($expiredIds);
+    }
+
+    public function markStalePendingPayments(?int $userId = null, ?int $timeoutMinutes = null): int
+    {
+        $timeoutMinutes = $timeoutMinutes ?? (int) (getenv('PAYMENT_PENDING_TIMEOUT_MINUTES') ?: 45);
+        $timeoutMinutes = max(10, min($timeoutMinutes, 1440));
+        $cutoff = date('Y-m-d H:i:s', strtotime('-' . $timeoutMinutes . ' minutes'));
+
+        $builder = $this->builder()
+            ->where('status', 'pending')
+            ->where('payment_status', 'pending')
+            ->where('payment_method', 'paychangu')
+            ->where('created_at <', $cutoff);
+
+        if ($userId !== null) {
+            $builder->where('user_id', $userId);
+        }
+
+        $staleRows = $builder->get()->getResultArray();
+        if ($staleRows === []) {
+            return 0;
+        }
+
+        $staleIds = array_map('intval', array_column($staleRows, 'id'));
+
+        $this->builder()
+            ->whereIn('id', $staleIds)
+            ->update([
+                'status' => 'cancelled',
+                'payment_status' => 'failed',
+                'updated_at' => $this->now(),
+            ]);
+
+        return count($staleIds);
     }
 
     public function getLatestActiveSubscription($userId, ?int $planId = null)
@@ -165,6 +211,7 @@ class TutorSubscriptionModel extends Model
     public function getAllWithDetails()
     {
         $this->markExpiredSubscriptions();
+        $this->markStalePendingPayments();
 
         return $this->select('tutor_subscriptions.*, users.first_name, users.last_name, users.email, users.district, subscription_plans.name as plan_name, subscription_plans.price_monthly')
                    ->join('users', 'users.id = tutor_subscriptions.user_id')

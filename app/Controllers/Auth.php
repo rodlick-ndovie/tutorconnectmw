@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Models\User;
 use App\Models\TutorModel;
 use App\Models\SiteSettingModel;
+use App\Models\UniversityCollegeTutorModel;
 
 class Auth extends BaseController
 {
@@ -12,6 +13,81 @@ class Auth extends BaseController
     protected $tutorModel;
     protected $siteSettingModel;
     protected $db;
+
+    private function getUniversityProfileForUser(array $user): ?array
+    {
+        $universityTutorModel = new UniversityCollegeTutorModel();
+
+        return $universityTutorModel->findLinkedProfile(
+            (int) ($user['id'] ?? 0),
+            (string) ($user['email'] ?? ''),
+            (string) ($user['username'] ?? '')
+        );
+    }
+
+    private function getPortalTypeForUser(array $user): string
+    {
+        return $this->getUniversityProfileForUser($user) ? 'university' : 'trainer';
+    }
+
+    private function getAuthenticatedHomeUrl(array $user): string
+    {
+        $portalType = $this->getPortalTypeForUser($user);
+
+        if ($portalType === 'university') {
+            return base_url('university-portal/dashboard');
+        }
+
+        if (($user['role'] ?? '') === 'admin') {
+            return base_url('admin/dashboard');
+        }
+
+        return base_url('trainer/dashboard');
+    }
+
+    private function getWelcomePortalMeta(array $user): array
+    {
+        $portalType = $this->getPortalTypeForUser($user);
+
+        if ($portalType === 'university') {
+            return [
+                'portal_type' => 'university',
+                'primary_action_url' => base_url('university-portal/dashboard'),
+                'primary_action_label' => 'Open University Portal',
+                'steps' => [
+                    '<strong>Review Your Application:</strong> Track your university tutor registration status and linked account details',
+                    '<strong>Prepare Your Profile:</strong> Organize your academic credentials, areas of specialization, and pricing details',
+                    '<strong>Wait for Admin Review:</strong> Your university support registration will be reviewed separately inside the portal',
+                    '<strong>Access Your Workspace:</strong> Use your dedicated university portal instead of the standard tutor dashboard',
+                ],
+                'tip_title' => 'University Portal',
+                'tip_message' => 'University tutors sign in through a separate workspace from the standard tutor portal.',
+            ];
+        }
+
+        return [
+            'portal_type' => 'trainer',
+            'primary_action_url' => base_url('trainer/dashboard/complete-profile'),
+            'primary_action_label' => 'Complete Your Profile',
+            'steps' => [
+                '<strong>Complete Your Profile:</strong> Add your bio, qualifications, and teaching experience',
+                '<strong>Upload Documents:</strong> Submit your ID, certificates, and clearances for verification',
+                '<strong>Set Availability:</strong> Define your teaching subjects, rates, and available times',
+                '<strong>Start Teaching:</strong> Connect with students and begin your tutoring journey',
+            ],
+            'tip_title' => 'Pro Tip',
+            'tip_message' => 'Tutors with complete profiles and verified documents get 10x more student inquiries!',
+        ];
+    }
+
+    private function renderWelcomeSteps(array $steps): string
+    {
+        if ($steps === []) {
+            return '';
+        }
+
+        return '<li>' . implode('</li><li>', $steps) . '</li>';
+    }
 
     /**
      * Get site setting value
@@ -122,7 +198,8 @@ class Auth extends BaseController
     public function register()
     {
         if (session()->get('user_id')) {
-            return redirect()->to('/trainer/dashboard');
+            $currentUser = $this->userModel->find((int) session()->get('user_id'));
+            return redirect()->to($currentUser ? $this->getAuthenticatedHomeUrl($currentUser) : '/trainer/dashboard');
         }
 
         // Clear old registration data if not in an active registration session
@@ -465,6 +542,9 @@ class Auth extends BaseController
             ]);
         }
 
+        $universityProfile = $this->getUniversityProfileForUser($user);
+        $portalType = $universityProfile ? 'university' : 'trainer';
+
         // Set session data
         $sessionData = [
             'user_id' => $user['id'],
@@ -473,6 +553,9 @@ class Auth extends BaseController
             'role' => $user['role'],
             'first_name' => $user['first_name'],
             'last_name' => $user['last_name'],
+            'portal_type' => $portalType,
+            'university_tutor_id' => $universityProfile['id'] ?? null,
+            'university_reference_code' => $universityProfile['reference_code'] ?? null,
             'is_logged_in' => true
         ];
 
@@ -480,8 +563,10 @@ class Auth extends BaseController
 
         log_message('info', 'User logged in: ' . $user['email']);
 
-        // For trainers, check if documents need to be uploaded (first time only)
-        if ($user['role'] === 'trainer') {
+        // University tutors have a separate portal and should not go through the trainer dashboard flow.
+        if ($portalType === 'university') {
+            $redirectUrl = base_url('university-portal/dashboard');
+        } elseif ($user['role'] === 'trainer') {
             // Check if user needs to complete profile documentation
             $needsDocuments = false;
             $documents = json_decode($user['verification_documents'], true);
@@ -586,6 +671,8 @@ class Auth extends BaseController
                 $emailService->setTo($user['email']);
                 $emailService->setSubject($this->getSiteSetting('company_name', 'TutorConnect Malawi') . ' - Welcome!');
                 $emailService->setMailType('html');
+                $welcomeMeta = $this->getWelcomePortalMeta($user);
+                $stepsHtml = $this->renderWelcomeSteps($welcomeMeta['steps']);
 
                 $content = "
                     <h2>Welcome to " . $this->getSiteSetting('company_name', 'TutorConnect Malawi') . ", {$user['first_name']}!</h2>
@@ -599,19 +686,16 @@ class Auth extends BaseController
 
                     <h3 style='color: #2C3E50;'>Next Steps:</h3>
                     <ul style='color: #555;'>
-                        <li><strong>Complete Your Profile:</strong> Add your bio, qualifications, and teaching experience</li>
-                        <li><strong>Upload Documents:</strong> Submit your ID, certificates, and clearances for verification</li>
-                        <li><strong>Set Availability:</strong> Define your teaching subjects, rates, and available times</li>
-                        <li><strong>Start Teaching:</strong> Connect with students and begin your tutoring journey</li>
+                        " . $stepsHtml . "
                     </ul>
 
                     <div style='text-align: center; margin: 30px 0;'>
-                        <a href='" . base_url('trainer/dashboard/complete-profile') . "' class='btn'>Complete Your Profile</a>
+                        <a href='" . $welcomeMeta['primary_action_url'] . "' class='btn'>" . $welcomeMeta['primary_action_label'] . "</a>
                     </div>
 
                     <div style='background: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;'>
-                        <h4 style='margin-top: 0; color: #2C3E50;'>💡 Pro Tip</h4>
-                        <p style='margin-bottom: 0; color: #666;'>Tutors with complete profiles and verified documents get 10x more student inquiries!</p>
+                        <h4 style='margin-top: 0; color: #2C3E50;'>" . $welcomeMeta['tip_title'] . "</h4>
+                        <p style='margin-bottom: 0; color: #666;'>" . $welcomeMeta['tip_message'] . "</p>
                     </div>
 
                     <p>Need help getting started? Our support team is here to assist you.</p>
@@ -643,7 +727,7 @@ class Auth extends BaseController
             session()->remove('success');
             session()->remove('error');
 
-            return redirect()->to('/login')->with('success', 'Email verified successfully! You can now login to complete your profile.');
+            return redirect()->to('/login')->with('success', 'Email verified successfully! You can now login to your account.');
         }
 
         // Backward compatibility: if code is provided in URL, auto-verify.
@@ -677,6 +761,8 @@ class Auth extends BaseController
                 $emailService->setTo($user['email']);
                 $emailService->setSubject($this->getSiteSetting('company_name', 'TutorConnect Malawi') . ' - Welcome!');
                 $emailService->setMailType('html');
+                $welcomeMeta = $this->getWelcomePortalMeta($user);
+                $stepsHtml = $this->renderWelcomeSteps($welcomeMeta['steps']);
 
                 $content = "
                     <h2>Welcome to " . $this->getSiteSetting('company_name', 'TutorConnect Malawi') . ", {$user['first_name']}!</h2>
@@ -690,19 +776,16 @@ class Auth extends BaseController
 
                     <h3 style='color: #2C3E50;'>Next Steps:</h3>
                     <ul style='color: #555;'>
-                        <li><strong>Complete Your Profile:</strong> Add your bio, qualifications, and teaching experience</li>
-                        <li><strong>Upload Documents:</strong> Submit your ID, certificates, and clearances for verification</li>
-                        <li><strong>Set Availability:</strong> Define your teaching subjects, rates, and available times</li>
-                        <li><strong>Start Teaching:</strong> Connect with students and begin your tutoring journey</li>
+                        " . $stepsHtml . "
                     </ul>
 
                     <div style='text-align: center; margin: 30px 0;'>
-                        <a href='" . base_url('trainer/dashboard/complete-profile') . "' class='btn'>Complete Your Profile</a>
+                        <a href='" . $welcomeMeta['primary_action_url'] . "' class='btn'>" . $welcomeMeta['primary_action_label'] . "</a>
                     </div>
 
                     <div style='background: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;'>
-                        <h4 style='margin-top: 0; color: #2C3E50;'>💡 Pro Tip</h4>
-                        <p style='margin-bottom: 0; color: #666;'>Tutors with complete profiles and verified documents get 10x more student inquiries!</p>
+                        <h4 style='margin-top: 0; color: #2C3E50;'>" . $welcomeMeta['tip_title'] . "</h4>
+                        <p style='margin-bottom: 0; color: #666;'>" . $welcomeMeta['tip_message'] . "</p>
                     </div>
 
                     <p>Need help getting started? Our support team is here to assist you.</p>
@@ -734,7 +817,7 @@ class Auth extends BaseController
             session()->remove('success');
             session()->remove('error');
 
-            return redirect()->to('/login')->with('success', 'Email verified successfully! You can now login to complete your profile.');
+            return redirect()->to('/login')->with('success', 'Email verified successfully! You can now login to your account.');
         }
 
         $data = [
@@ -824,6 +907,8 @@ class Auth extends BaseController
                 $emailService->setTo($user['email']);
                 $emailService->setSubject($this->getSiteSetting('company_name', 'TutorConnect Malawi') . ' - Welcome!');
                 $emailService->setMailType('html');
+                $welcomeMeta = $this->getWelcomePortalMeta($user);
+                $stepsHtml = $this->renderWelcomeSteps($welcomeMeta['steps']);
 
                 $content = "
                     <h2>Welcome to " . $this->getSiteSetting('company_name', 'TutorConnect Malawi') . ", {$user['first_name']}!</h2>
@@ -837,19 +922,16 @@ class Auth extends BaseController
 
                     <h3 style='color: #2C3E50;'>Next Steps:</h3>
                     <ul style='color: #555;'>
-                        <li><strong>Complete Your Profile:</strong> Add your bio, qualifications, and teaching experience</li>
-                        <li><strong>Upload Documents:</strong> Submit your ID, certificates, and clearances for verification</li>
-                        <li><strong>Set Availability:</strong> Define your teaching subjects, rates, and available times</li>
-                        <li><strong>Start Teaching:</strong> Connect with students and begin your tutoring journey</li>
+                        " . $stepsHtml . "
                     </ul>
 
                     <div style='text-align: center; margin: 30px 0;'>
-                        <a href='" . base_url('trainer/dashboard/complete-profile') . "' class='btn'>Complete Your Profile</a>
+                        <a href='" . $welcomeMeta['primary_action_url'] . "' class='btn'>" . $welcomeMeta['primary_action_label'] . "</a>
                     </div>
 
                     <div style='background: #f8f9fa; padding: 20px; border-radius: 6px; margin: 20px 0;'>
-                        <h4 style='margin-top: 0; color: #2C3E50;'>💡 Pro Tip</h4>
-                        <p style='margin-bottom: 0; color: #666;'>Tutors with complete profiles and verified documents get 10x more student inquiries!</p>
+                        <h4 style='margin-top: 0; color: #2C3E50;'>" . $welcomeMeta['tip_title'] . "</h4>
+                        <p style='margin-bottom: 0; color: #666;'>" . $welcomeMeta['tip_message'] . "</p>
                     </div>
 
                     <p>Need help getting started? Our support team is here to assist you.</p>
@@ -1020,7 +1102,8 @@ class Auth extends BaseController
     public function forgotPassword()
     {
         if (session()->get('user_id')) {
-            return redirect()->to('/trainer/dashboard');
+            $currentUser = $this->userModel->find((int) session()->get('user_id'));
+            return redirect()->to($currentUser ? $this->getAuthenticatedHomeUrl($currentUser) : '/trainer/dashboard');
         }
 
         $data['title'] = 'Forgot Password - TutorConnect Malawi';

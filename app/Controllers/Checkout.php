@@ -14,6 +14,58 @@ class Checkout extends BaseController
         $this->tutorSubscriptionModel = new \App\Models\TutorSubscriptionModel();
     }
 
+    private function getPortalContext(?int $userId = null, ?array $user = null): array
+    {
+        $portalType = 'trainer';
+
+        if (($user['role'] ?? session()->get('role')) === 'trainer') {
+            if (session()->get('portal_type') === 'university') {
+                $portalType = 'university';
+            } else {
+                $lookupUserId = $userId ?? (int) session()->get('user_id');
+                $lookupEmail = (string) ($user['email'] ?? session()->get('email') ?? '');
+                $lookupUsername = (string) ($user['username'] ?? session()->get('username') ?? '');
+
+                if ($lookupUserId > 0 || $lookupEmail !== '' || $lookupUsername !== '') {
+                    $profile = (new \App\Models\UniversityCollegeTutorModel())->findLinkedProfile($lookupUserId, $lookupEmail, $lookupUsername);
+                    if ($profile) {
+                        $portalType = 'university';
+                    }
+                }
+            }
+        }
+
+        if ($portalType === 'university') {
+            return [
+                'type' => 'university',
+                'dashboard_url' => base_url('university-portal/dashboard'),
+                'subscription_url' => base_url('university-portal/subscription'),
+                'complete_profile_url' => base_url('university-portal/complete-profile'),
+                'public_module_url' => base_url('university-college-support'),
+                'checkout_return_url' => base_url('university-portal/checkout/paychangu/return'),
+                'checkout_process_url' => base_url('university-portal/checkout/process-subscription'),
+                'check_payment_status_url' => base_url('university-portal/checkout/checkPaymentStatus'),
+                'checkout_view' => 'university_portal/checkout',
+                'payment_success_view' => 'university_portal/payment_success',
+                'payment_failed_view' => 'university_portal/payment_failed',
+            ];
+        }
+
+        return [
+            'type' => 'trainer',
+            'dashboard_url' => base_url('trainer/dashboard'),
+            'subscription_url' => base_url('trainer/subscription'),
+            'complete_profile_url' => base_url('trainer/profile'),
+            'public_module_url' => base_url(),
+            'checkout_return_url' => base_url('trainer/checkout/paychangu/return'),
+            'checkout_process_url' => base_url('trainer/checkout/process-subscription'),
+            'check_payment_status_url' => base_url('trainer/checkout/checkPaymentStatus'),
+            'checkout_view' => 'trainer/checkout',
+            'payment_success_view' => 'trainer/payment_success',
+            'payment_failed_view' => 'trainer/payment_failed',
+        ];
+    }
+
     /**
      * Show checkout page for subscription plan
      */
@@ -31,13 +83,15 @@ class Checkout extends BaseController
             return redirect()->to('/login');
         }
 
+        $portalContext = $this->getPortalContext((int) $userId, $currentUser);
+
         // Check if planId is provided via GET or URL segment
         if (!$planId) {
             $planId = $this->request->getGet('plan');
         }
 
         if (!$planId) {
-            return redirect()->to('/trainer/subscription')
+            return redirect()->to($portalContext['subscription_url'])
                 ->with('error', 'Please select a subscription plan to continue.');
         }
 
@@ -45,18 +99,30 @@ class Checkout extends BaseController
         $plan = $this->subscriptionPlanModel->find($planId);
 
         if (!$plan) {
-            return redirect()->to('/trainer/subscription')
+            return redirect()->to($portalContext['subscription_url'])
                 ->with('error', 'Selected plan not found.');
         }
 
         // Check if plan is active
         if (!$plan['is_active']) {
-            return redirect()->to('/trainer/subscription')
+            return redirect()->to($portalContext['subscription_url'])
                 ->with('error', 'Selected plan is not currently available.');
+        }
+
+        $planPortalType = $this->subscriptionPlanModel->normalizePortalType($plan['portal_type'] ?? 'trainer');
+        if ($planPortalType !== $portalContext['type']) {
+            return redirect()->to($portalContext['subscription_url'])
+                ->with('error', 'Selected plan is not available for this portal.');
         }
 
         // Check if user already has an active subscription they would be upgrading from
         $currentSubscription = $this->tutorSubscriptionModel->getSubscriptionWithPlan($userId);
+        $maxBillingMonths = $this->tutorSubscriptionModel->getMaxBillingMonths();
+
+        $defaultBillingMonths = $this->tutorSubscriptionModel->normalizeBillingMonths($this->request->getGet('months'));
+        if ((float) $plan['price_monthly'] <= 0) {
+            $defaultBillingMonths = 1;
+        }
 
         $data = [
             'title' => 'Checkout - ' . $plan['name'] . ' Plan',
@@ -65,11 +131,11 @@ class Checkout extends BaseController
                 'name' => $plan['name'],
                 'price_monthly' => $plan['price_monthly'],
                 'description' => $plan['description'] ?? '',
-                'features' => isset($plan['features']) ? json_decode($plan['features'], true) : [],
+                'features' => $this->decodePlanIncludedFeatures($plan['features'] ?? null),
                 'formatted_price' => number_format($plan['price_monthly'], 0, ',', ','),
             ],
-            'default_billing_months' => 1,
-            'max_billing_months' => 120,
+            'default_billing_months' => $defaultBillingMonths,
+            'max_billing_months' => $maxBillingMonths,
             'user' => [
                 'id' => $currentUser['id'],
                 'first_name' => $currentUser['first_name'],
@@ -88,10 +154,42 @@ class Checkout extends BaseController
                 'bank_transfer' => 'Bank Transfer',
                 'mobile_money' => 'Mobile Money (Airtel Money, TNM Mpamba)',
                 'cash' => 'Cash Payment'
-            ]
+            ],
+            'portal_type' => $portalContext['type'],
+            'dashboard_url' => $portalContext['dashboard_url'],
+            'subscription_url' => $portalContext['subscription_url'],
+            'checkout_process_url' => $portalContext['checkout_process_url'],
+            'check_payment_status_url' => $portalContext['check_payment_status_url'],
+            'checkout_return_url' => $portalContext['checkout_return_url'],
+            'complete_profile_url' => $portalContext['complete_profile_url'],
+            'public_module_url' => $portalContext['public_module_url'],
         ];
 
-        return view('trainer/checkout', $data);
+        return view($portalContext['checkout_view'], $data);
+    }
+
+    private function decodePlanIncludedFeatures($rawFeatures): array
+    {
+        $rawFeatures = trim((string) $rawFeatures);
+
+        if ($rawFeatures === '') {
+            return [];
+        }
+
+        $decoded = json_decode($rawFeatures, true);
+
+        if (is_array($decoded)) {
+            $isList = $decoded === [] || array_keys($decoded) === range(0, count($decoded) - 1);
+            $features = $isList ? $decoded : ($decoded['included'] ?? []);
+
+            if (is_array($features)) {
+                return array_values(array_filter(array_map(static fn ($feature) => trim((string) $feature), $features), static fn ($feature) => $feature !== ''));
+            }
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', $rawFeatures) ?: [];
+
+        return array_values(array_filter(array_map(static fn ($feature) => trim((string) $feature), $lines), static fn ($feature) => $feature !== ''));
     }
 
     /**
@@ -111,6 +209,7 @@ class Checkout extends BaseController
         // Get POST data
         $planId = $this->request->getPost('plan_id');
         $termsAccepted = $this->request->getPost('terms_accepted');
+        $maxBillingMonths = $this->tutorSubscriptionModel->getMaxBillingMonths();
         $billingMonths = $this->tutorSubscriptionModel->normalizeBillingMonths($this->request->getPost('billing_months'));
 
         // Validate required fields
@@ -118,7 +217,7 @@ class Checkout extends BaseController
         $validation->setRules([
             'plan_id' => 'required|numeric',
             'terms_accepted' => 'required',
-            'billing_months' => 'permit_empty|integer|greater_than_equal_to[1]|less_than_equal_to[120]',
+            'billing_months' => 'permit_empty|integer|greater_than_equal_to[1]|less_than_equal_to[' . $maxBillingMonths . ']',
         ]);
 
         if (!$validation->withRequest($this->request)->run()) {
@@ -138,6 +237,12 @@ class Checkout extends BaseController
         // Check if user is approved for subscriptions
         $user = new \App\Models\User();
         $currentUser = $user->find($userId);
+        $portalContext = $this->getPortalContext((int) $userId, $currentUser ?? []);
+
+        $planPortalType = $this->subscriptionPlanModel->normalizePortalType($plan['portal_type'] ?? 'trainer');
+        if ($planPortalType !== $portalContext['type']) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Selected plan is not available for this portal.']);
+        }
 
         // Require email verification before allowing subscription access
         if (!$currentUser || !$currentUser['is_active'] || !$currentUser['email_verified_at']) {
@@ -183,6 +288,8 @@ class Checkout extends BaseController
         ]);
 
         try {
+            $this->tutorSubscriptionModel->markStalePendingPayments((int) $userId);
+
             // For free plans, activate immediately
             if ($isFreePlan) {
                 // Calculate new billing period starting from plan change
@@ -239,7 +346,7 @@ class Checkout extends BaseController
                 return $this->response->setJSON([
                     'success' => true,
                     'message' => 'Free trial subscription activated successfully! You now have access to all trial features.',
-                    'redirect' => base_url('trainer/dashboard'),
+                    'redirect' => $portalContext['dashboard_url'],
                     'subscription_id' => $subscriptionId
                 ]);
             }
@@ -307,7 +414,7 @@ class Checkout extends BaseController
                     'first_name' => $currentUser['first_name'],
                     'last_name' => $currentUser['last_name'],
                     'callback_url' => base_url('checkout/paychangu/callback'),
-                    'return_url' => base_url('trainer/checkout/paychangu/return'),
+                    'return_url' => $portalContext['checkout_return_url'],
                     'customization[title]' => 'TutorConnect Malawi - ' . $plan['name'] . ' Plan',
                     'customization[description]' => $plan['name'] . ' subscription plan for ' . $durationLabel,
                     'meta[plan_id]' => $planId,
@@ -324,13 +431,14 @@ class Checkout extends BaseController
                 // Return PayChangu config for inline modal with required callback_url
                 return $this->response->setJSON([
                     'success' => true,
+                    'hosted_checkout_url' => $checkoutUrl,
                     'paychangu_config' => [
                         'public_key' => getenv('PAYCHANGU_PUBLIC_KEY') ?: 'PUB-TEST-MB33j3iotOje4NXksN3UxQh8D9vZDYTk',
                         'tx_ref' => $txRef,
                         'amount' => $expectedAmount,
                         'currency' => 'MWK',
-                    'callback_url' => base_url('checkout/paychangu/callback'), // Webhook - source of truth
-                    'return_url' => base_url('trainer/checkout/paychangu/return'), // UI-only - never trust for verification
+                        'callback_url' => base_url('checkout/paychangu/callback'),
+                        'return_url' => $portalContext['checkout_return_url'],
                         'customer' => [
                             'email' => $currentUser['email'],
                             'first_name' => $currentUser['first_name'],
@@ -377,7 +485,6 @@ class Checkout extends BaseController
      */
     public function paychanguReturn()
     {
-        // NEVER trust redirect/query-string status - callback_url is source of truth
         $txRef = $this->request->getGet('tx_ref');
 
         // Validate transaction reference
@@ -386,9 +493,8 @@ class Checkout extends BaseController
             return $this->showPaymentResult('error', 'Invalid payment reference. Please contact support.');
         }
 
-        log_message('info', 'PayChangu return: UI-only handler for tx_ref: ' . $txRef . ' (NEVER trusts redirect data)');
+        log_message('info', 'PayChangu return: verifying tx_ref: ' . $txRef);
 
-        // Query existing database record - NEVER perform API verification here
         $subscription = $this->tutorSubscriptionModel->where('payment_reference', $txRef)->first();
 
         if (!$subscription) {
@@ -400,25 +506,18 @@ class Checkout extends BaseController
             return $this->showPaymentResult('success', $this->buildActivationSuccessMessage($subscription), $subscription);
         }
 
-        // SINCE USER WAS REDIRECTED HERE BY PAYCHANGU, TRUST IT AS SUCCESS
-        // PayChangu only redirects to return_url for completed payments
-        log_message('info', 'PayChangu return: User redirected to return URL - TRUSTING AS SUCCESS for tx_ref: ' . $txRef);
+        $syncResult = $this->verifyAndSyncPayChanguSubscription((string) $txRef, $subscription);
+        $subscription = $syncResult['subscription'] ?? $subscription;
 
-        $updatedSubscription = $this->tutorSubscriptionModel->activateSubscription((int) $subscription['id']);
-
-        if (!$updatedSubscription) {
-            log_message('error', 'PayChangu return: Failed to activate subscription for tx_ref: ' . $txRef);
-            return $this->showPaymentResult('error', 'We could not activate this subscription automatically. Please contact support.');
+        if (($syncResult['status'] ?? '') === 'success') {
+            return $this->showPaymentResult('success', $this->buildActivationSuccessMessage($subscription), $subscription);
         }
 
-        if ($this->shouldResetUsageCounters($updatedSubscription)) {
-            $this->resetUsageCountersOnPlanChange($updatedSubscription['user_id']);
+        if (($syncResult['status'] ?? '') === 'failed') {
+            return $this->showPaymentResult('failed', 'Payment was not successful. No subscription has been activated.', $subscription);
         }
 
-        $this->sendPaymentSuccessNotification($updatedSubscription['user_id'], $updatedSubscription);
-
-        log_message('info', 'PayChangu return: ACTIVATED payment for tx_ref: ' . $txRef . ' (trusted redirect)');
-        return $this->showPaymentResult('success', $this->buildActivationSuccessMessage($updatedSubscription), $updatedSubscription);
+        return $this->showPaymentResult('processing', 'We are still confirming this payment. This page will update automatically once PayChangu confirms it.', $subscription, true);
     }
 
     /**
@@ -426,22 +525,33 @@ class Checkout extends BaseController
      */
     private function showPaymentResult($status, $message, $subscription = null, $enablePolling = false)
     {
+        $portalContext = $this->getPortalContext(
+            $subscription ? (int) ($subscription['user_id'] ?? 0) : (int) session()->get('user_id')
+        );
+
         $data = [
+            'status' => $status,
             'message' => $message,
             'subscription' => $subscription,
             'enablePolling' => $enablePolling,
-            'txRef' => $subscription ? $subscription['payment_reference'] : null
+            'txRef' => $subscription ? $subscription['payment_reference'] : null,
+            'portal_type' => $portalContext['type'],
+            'dashboard_url' => $portalContext['dashboard_url'],
+            'subscription_url' => $portalContext['subscription_url'],
+            'check_payment_status_url' => $portalContext['check_payment_status_url'],
+            'complete_profile_url' => $portalContext['complete_profile_url'],
+            'public_module_url' => $portalContext['public_module_url'],
         ];
 
         // Use separate views for success and failure
         if ($status === 'success') {
-            return view('trainer/payment_success', $data);
-        } elseif ($status === 'failed') {
-            return view('trainer/payment_failed', $data);
+            return view($portalContext['payment_success_view'], $data);
+        } elseif (in_array($status, ['failed', 'error'], true)) {
+            return view($portalContext['payment_failed_view'], $data);
         } else {
-            // For processing or unknown states, use success view with processing message
             $data['message'] = $message ?: 'Please wait while we confirm your payment...';
-            return view('trainer/payment_success', $data);
+            $processingView = $portalContext['type'] === 'trainer' ? 'trainer/payment_result' : $portalContext['payment_success_view'];
+            return view($processingView, $data);
         }
     }
 
@@ -464,6 +574,13 @@ class Checkout extends BaseController
 
         if (!$subscription) {
             return $this->response->setJSON(['error' => 'Payment record not found']);
+        }
+
+        if (($subscription['payment_status'] ?? '') === 'pending') {
+            $syncResult = $this->verifyAndSyncPayChanguSubscription((string) $txRef, $subscription);
+            if (!empty($syncResult['subscription'])) {
+                $subscription = $syncResult['subscription'];
+            }
         }
 
         $response = [
@@ -491,6 +608,111 @@ class Checkout extends BaseController
         }
     }
 
+    private function extractPayChanguReferenceAndStatus(array $payload): array
+    {
+        $data = isset($payload['data']) && is_array($payload['data']) ? $payload['data'] : [];
+
+        return [
+            'tx_ref' => $payload['tx_ref']
+                ?? $payload['txRef']
+                ?? $payload['reference']
+                ?? $payload['event']['tx_ref']
+                ?? $data['tx_ref']
+                ?? $data['txRef']
+                ?? $data['reference']
+                ?? null,
+            'status' => $payload['status']
+                ?? $payload['event_type']
+                ?? $data['status']
+                ?? $data['payment_status']
+                ?? null,
+        ];
+    }
+
+    private function normalizePayChanguStatus(?string $status): string
+    {
+        $status = strtolower(trim((string) $status));
+
+        if (in_array($status, ['success', 'successful', 'completed', 'complete', 'paid'], true)) {
+            return 'success';
+        }
+
+        if (in_array($status, ['failed', 'failure', 'cancelled', 'canceled', 'declined', 'abandoned', 'reversed', 'timeout', 'expired'], true)) {
+            return 'failed';
+        }
+
+        return 'pending';
+    }
+
+    private function apiVerificationStatus(?array $apiResult, string $txRef, float $expectedAmount): string
+    {
+        $paychangu = \Config\Services::paychangu();
+
+        if ($paychangu->isSuccessfulVerification($apiResult, $txRef, 'MWK', $expectedAmount)) {
+            return 'success';
+        }
+
+        $data = is_array($apiResult) && isset($apiResult['data']) && is_array($apiResult['data'])
+            ? $apiResult['data']
+            : [];
+
+        return $this->normalizePayChanguStatus((string) ($data['status'] ?? $apiResult['status'] ?? ''));
+    }
+
+    private function verifyAndSyncPayChanguSubscription(string $txRef, array $subscription, ?string $webhookStatus = null): array
+    {
+        $txRef = trim($txRef);
+        if ($txRef === '') {
+            return ['status' => 'error', 'subscription' => $subscription];
+        }
+
+        if (($subscription['payment_status'] ?? '') === 'verified' && ($subscription['status'] ?? '') === 'active') {
+            return ['status' => 'success', 'subscription' => $subscription];
+        }
+
+        $paychangu = \Config\Services::paychangu();
+        $apiResult = $paychangu->verifyPayment($txRef);
+        $expectedAmount = isset($subscription['payment_amount']) ? (float) $subscription['payment_amount'] : 0.0;
+        $webhookNormalized = $this->normalizePayChanguStatus($webhookStatus);
+        $apiNormalized = $this->apiVerificationStatus($apiResult, $txRef, $expectedAmount);
+
+        log_message('info', 'PayChangu verification sync: tx_ref=' . $txRef .
+            ', webhook=' . ($webhookStatus ?? 'none') .
+            ', webhook_normalized=' . $webhookNormalized .
+            ', api_normalized=' . $apiNormalized .
+            ', api=' . json_encode($apiResult));
+
+        if ($webhookNormalized === 'success' || $apiNormalized === 'success') {
+            $updatedSubscription = $this->tutorSubscriptionModel->activateSubscription((int) $subscription['id']);
+
+            if (!$updatedSubscription) {
+                return ['status' => 'error', 'subscription' => $subscription];
+            }
+
+            if ($this->shouldResetUsageCounters($updatedSubscription)) {
+                $this->resetUsageCountersOnPlanChange($updatedSubscription['user_id']);
+            }
+
+            $this->sendPaymentSuccessNotification($updatedSubscription['user_id'], $updatedSubscription);
+
+            return ['status' => 'success', 'subscription' => $updatedSubscription];
+        }
+
+        if ($webhookNormalized === 'failed' || $apiNormalized === 'failed') {
+            $this->tutorSubscriptionModel->update($subscription['id'], [
+                'status' => 'cancelled',
+                'payment_status' => 'failed',
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            $updatedSubscription = $this->tutorSubscriptionModel->find((int) $subscription['id']) ?: $subscription;
+
+            return ['status' => 'failed', 'subscription' => $updatedSubscription];
+        }
+
+        return ['status' => 'pending', 'subscription' => $subscription];
+    }
+
     /**
      * PayChangu webhook callback - Source of truth for payment verification
      * Updates payment_status and subscription status only after verification
@@ -502,14 +724,14 @@ class Checkout extends BaseController
         $method = $this->request->getMethod();
         log_message('info', 'PayChangu callback received via ' . $method);
 
-        // Extract webhook data
         $txRef = null;
         $webhookStatus = null;
 
         if ($method === 'POST') {
-            $json = $this->request->getJSON();
-            $txRef = $json->tx_ref ?? null;
-            $webhookStatus = $json->status ?? null;
+            $json = $this->request->getJSON(true) ?? [];
+            $webhook = $this->extractPayChanguReferenceAndStatus($json);
+            $txRef = $webhook['tx_ref'];
+            $webhookStatus = $webhook['status'];
             log_message('info', 'PayChangu webhook: tx_ref=' . $txRef . ', status=' . $webhookStatus . ', full_data=' . json_encode($json));
         } elseif ($method === 'GET') {
             $txRef = $this->request->getGet('tx_ref');
@@ -525,9 +747,15 @@ class Checkout extends BaseController
                 ]);
             }
 
-            // User was redirected back after payment - redirect to return handler for proper UI experience
-            log_message('info', 'PayChangu GET callback: User redirected back - redirecting to return handler for tx_ref: ' . $txRef);
-            return redirect()->to(base_url('trainer/checkout/paychangu/return?tx_ref=' . $txRef));
+            $redirectSubscription = $this->tutorSubscriptionModel->where('payment_reference', $txRef)->first();
+            if ($redirectSubscription && ($redirectSubscription['payment_status'] ?? '') !== 'verified') {
+                $this->verifyAndSyncPayChanguSubscription((string) $txRef, $redirectSubscription, $webhookStatus ? (string) $webhookStatus : null);
+            }
+
+            log_message('info', 'PayChangu GET callback: redirecting to return handler for tx_ref: ' . $txRef);
+            $redirectContext = $this->getPortalContext($redirectSubscription ? (int) ($redirectSubscription['user_id'] ?? 0) : (int) session()->get('user_id'));
+
+            return redirect()->to($redirectContext['checkout_return_url'] . '?tx_ref=' . rawurlencode((string) $txRef));
         }
 
         if (!$txRef) {
@@ -545,7 +773,7 @@ class Checkout extends BaseController
                 // If accessed by user (not PayChangu server), redirect to error page
                 if ($method === 'GET') {
                     log_message('info', 'PayChangu callback: GET request with invalid tx_ref - redirecting to error');
-                    return redirect()->to(base_url('trainer/checkout/paychangu/return?tx_ref=invalid'))
+                    return redirect()->to($this->getPortalContext((int) session()->get('user_id'))['checkout_return_url'] . '?tx_ref=invalid')
                         ->with('error', 'Invalid payment reference');
                 }
 
@@ -559,75 +787,25 @@ class Checkout extends BaseController
                 // If accessed by user, redirect to success page
                 if ($method === 'GET') {
                     log_message('info', 'PayChangu callback: GET request for already processed payment - redirecting to success');
-                    return redirect()->to(base_url('trainer/checkout/paychangu/return?tx_ref=' . $txRef));
+                    $redirectContext = $this->getPortalContext((int) ($subscription['user_id'] ?? 0));
+
+                    return redirect()->to($redirectContext['checkout_return_url'] . '?tx_ref=' . rawurlencode((string) $txRef));
                 }
 
                 return $this->response->setJSON(['status' => 'success', 'message' => 'Already processed']);
             }
 
-            // Verify payment using webhook + PayChangu API
-            $paychangu = \Config\Services::paychangu();
-            $apiResult = $paychangu->verifyPayment($txRef);
+            $syncResult = $this->verifyAndSyncPayChanguSubscription((string) $txRef, $subscription, $webhookStatus ? (string) $webhookStatus : null);
 
-            // Determine if payment is successful
-            $webhookSuccess = $webhookStatus === 'success';
-            $apiSuccess = $paychangu->isSuccessfulVerification(
-                $apiResult,
-                (string) $txRef,
-                'MWK',
-                isset($subscription['payment_amount']) ? (float) $subscription['payment_amount'] : null
-            );
-
-            // SPECIAL HANDLING: In test environment, if API fails but we have a valid tx_ref,
-            // assume success since PayChangu processed the payment (trust the redirect flow)
-            $isTestMode = strpos(getenv('PAYCHANGU_PUBLIC_KEY') ?: '', 'PUB-TEST-') === 0;
-            $fallbackSuccess = $isTestMode && $apiResult === null && !empty($txRef);
-
-            $isPaymentSuccessful = $webhookSuccess || $apiSuccess || $fallbackSuccess;
-
-            log_message('info', 'PayChangu verification: webhook=' . ($webhookStatus ?? 'none') .
-                      ', api=' . json_encode($apiResult) .
-                      ', test_mode=' . ($isTestMode ? 'yes' : 'no') .
-                      ', fallback_success=' . ($fallbackSuccess ? 'yes' : 'no') .
-                      ', final_success=' . ($isPaymentSuccessful ? 'yes' : 'no'));
-
-            if ($isPaymentSuccessful) {
-                $updatedSubscription = $this->tutorSubscriptionModel->activateSubscription((int) $subscription['id']);
-
-                if (!$updatedSubscription) {
-                    log_message('error', 'PayChangu callback: Activation failed for tx_ref: ' . $txRef);
-                    return $this->response->setStatusCode(500)->setJSON(['status' => 'error', 'message' => 'Subscription activation failed']);
-                }
-
-                if ($this->shouldResetUsageCounters($updatedSubscription)) {
-                    $this->resetUsageCountersOnPlanChange($updatedSubscription['user_id']);
-                }
-
-                // Send success notification (idempotent)
-                $this->sendPaymentSuccessNotification($updatedSubscription['user_id'], $updatedSubscription);
-
-                log_message('info', 'PayChangu callback: SUCCESS - activated subscription ' . $subscription['id'] . ' for tx_ref: ' . $txRef);
-
+            if (($syncResult['status'] ?? '') === 'success') {
                 return $this->response->setJSON(['status' => 'success', 'message' => 'Payment processed successfully']);
+            }
 
-            } else {
-                // Payment failed - update status using existing model
-                $this->tutorSubscriptionModel->update($subscription['id'], [
-                    'status' => 'cancelled',
-                    'payment_status' => 'failed',
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]);
-
-                log_message('info', 'PayChangu callback: FAILED - cancelled subscription ' . $subscription['id'] . ' for tx_ref: ' . $txRef);
-
-                // For GET requests (user might see this), redirect to return URL so return handler can activate if needed
-                if ($method === 'GET') {
-                    log_message('info', 'PayChangu callback: GET request failed - redirecting to return URL for user experience');
-                    return redirect()->to(base_url('trainer/checkout/paychangu/return?tx_ref=' . $txRef));
-                }
-
+            if (($syncResult['status'] ?? '') === 'failed') {
                 return $this->response->setJSON(['status' => 'failed', 'message' => 'Payment failed']);
             }
+
+            return $this->response->setJSON(['status' => 'pending', 'message' => 'Payment is still pending verification']);
 
         } catch (\Exception $e) {
             log_message('error', 'PayChangu callback exception: ' . $e->getMessage() . ' for tx_ref: ' . $txRef);
@@ -664,6 +842,8 @@ class Checkout extends BaseController
             $plan = $this->subscriptionPlanModel->find($subscription['plan_id']);
 
             if (!$subscriber || !$plan) return;
+
+            $portalContext = $this->getPortalContext((int) $userId, $subscriber);
 
             $emailService = \Config\Services::email();
 
@@ -718,7 +898,7 @@ class Checkout extends BaseController
                 <li>Priority support and assistance</li>
             </ul>
 
-            <a href='" . base_url('trainer/dashboard') . "' class='action-button'>Access Your Dashboard →</a>
+            <a href='" . $portalContext['dashboard_url'] . "' class='action-button'>Access Your Dashboard →</a>
 
             <p><em>Thank you for choosing TutorConnect Malawi! We're excited to support your teaching journey.</em></p>
         </div>
@@ -744,7 +924,7 @@ Valid Until: " . date('M j, Y', strtotime($subscription['current_period_end'])) 
 
 You now have access to all features of your {$plan['name']} plan.
 
-Access your dashboard: " . base_url('trainer/dashboard') . "
+Access your dashboard: " . $portalContext['dashboard_url'] . "
 
 Thank you for choosing TutorConnect Malawi!
 

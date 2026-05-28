@@ -69,96 +69,116 @@
     </div>
 </div>
 
-<div class="content-card dashboard-section-card money-overview-card">
+<div class="content-card dashboard-section-card revenue-report-card">
     <div class="money-overview-header">
         <div>
-            <div class="section-eyebrow">Revenue Snapshot</div>
-            <h3 class="section-title">Money Overview</h3>
+            <div class="section-eyebrow">Revenue Reporting</div>
+            <h3 class="section-title">Professional Pricing Overview</h3>
             <p class="section-subtitle">
-                A clean snapshot of revenue signals. MRR is recurring revenue from active subscriptions, plus Japan fees and paid past paper sales.
+                A clear view of every section where the platform receives payments.
             </p>
         </div>
 
         <div class="money-total-card">
             <div class="money-total-label">Total Revenue</div>
             <div class="money-total-value">MK <?php echo number_format($stats['total_revenue'] ?? 0); ?></div>
-            <div class="money-total-meta">MRR + Japan Fees + Past Papers</div>
+            <div class="money-total-meta">Verified income from all paid sections</div>
             <div class="money-total-updated">Updated: <?= date('M d, Y H:i') ?></div>
         </div>
     </div>
 
-    <div class="money-overview-grid">
-        <div class="revenue-metric-card">
-            <div class="revenue-metric-head">
-                <div class="revenue-metric-meta">
-                    <div class="stat-icon revenue-icon" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
-                        <i class="fas fa-repeat"></i>
-                    </div>
-                    <div>
-                        <div class="revenue-metric-label">Active Subscription MRR</div>
-                        <div class="revenue-metric-value">MK <?php echo number_format($stats['subscription_revenue'] ?? 0); ?></div>
-                    </div>
-                </div>
-                <a href="<?php echo base_url('admin/tutor-subscriptions'); ?>" class="revenue-metric-link">Details</a>
-            </div>
-            <div class="revenue-metric-foot">Active subscriptions only.</div>
-        </div>
-
-        <div class="revenue-metric-card">
-            <div class="revenue-metric-head">
-                <div class="revenue-metric-meta">
-                    <div class="stat-icon revenue-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
-                        <i class="fas fa-plane-departure"></i>
-                    </div>
-                    <div>
-                        <div class="revenue-metric-label">Japan Application Fees</div>
-                        <div class="revenue-metric-value">MK <?php echo number_format($stats['japan_application_fees_total'] ?? 0); ?></div>
-                    </div>
-                </div>
-                <a href="<?php echo base_url('admin/japan-payments'); ?>" class="revenue-metric-link">Details</a>
-            </div>
-            <div class="revenue-metric-foot">
-                Verified payments: <strong><?php echo number_format($stats['japan_verified_payments_total'] ?? 0); ?></strong>
-                <span class="revenue-metric-divider">|</span>
-                Submitted applications: <strong><?php echo number_format($stats['japan_applications_total'] ?? 0); ?></strong>
-            </div>
-        </div>
-
-        <div class="revenue-metric-card">
-            <div class="revenue-metric-head">
-                <div class="revenue-metric-meta">
-                    <div class="stat-icon revenue-icon" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white;">
-                        <i class="fas fa-credit-card"></i>
-                    </div>
-                    <div>
-                        <div class="revenue-metric-label">Verified Subscription Payments</div>
-                        <div class="revenue-metric-value">MK <?php echo number_format($stats['paychangu_revenue'] ?? 0); ?></div>
-                    </div>
-                </div>
-                <span class="revenue-metric-link revenue-metric-link-muted">Verified only</span>
-            </div>
-            <div class="revenue-metric-foot">Confirmed PayChangu subscription payments.</div>
-        </div>
-
-        <div class="revenue-metric-card">
-            <div class="revenue-metric-head">
-                <div class="revenue-metric-meta">
-                    <div class="stat-icon revenue-icon" style="background: linear-gradient(135deg, #06b6d4, #0f766e); color: white;">
-                        <i class="fas fa-file-invoice-dollar"></i>
-                    </div>
-                    <div>
-                        <div class="revenue-metric-label">Past Paper Income</div>
-                        <div class="revenue-metric-value">MK <?php echo number_format($stats['past_paper_income_total'] ?? 0); ?></div>
-                    </div>
-                </div>
-                <a href="<?php echo base_url('admin/past-paper-payments'); ?>" class="revenue-metric-link">Details</a>
-            </div>
-            <div class="revenue-metric-foot">
-                Verified purchases: <strong><?php echo number_format($stats['past_paper_verified_purchases_total'] ?? 0); ?></strong>
-                <span class="revenue-metric-divider">|</span>
-                Paid papers listed: <strong><?php echo number_format($stats['paid_past_papers_total'] ?? 0); ?></strong>
-            </div>
-        </div>
+    <div class="revenue-report-table-wrap">
+        <table class="table revenue-report-table align-middle">
+            <thead>
+                <tr>
+                    <th>Revenue Section</th>
+                    <th>Professional Price Type</th>
+                    <th>Activity</th>
+                    <th class="text-end">Revenue</th>
+                    <th class="text-end">Manage</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="revenue-source">
+                            <span class="revenue-source-icon"><i class="fas fa-repeat"></i></span>
+                            <div>
+                                <strong>Regular Tutor Subscriptions</strong>
+                                <small>Recurring tutor plan payments</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>Professional tutor plan pricing</td>
+                    <td>
+                        <strong><?= number_format($stats['tutor_active_subscriptions'] ?? 0) ?></strong> active subscriptions
+                    </td>
+                    <td class="text-end revenue-amount">MK <?= number_format($stats['tutor_subscription_revenue'] ?? 0) ?></td>
+                    <td class="text-end"><a href="<?= base_url('admin/tutor-subscriptions') ?>" class="revenue-metric-link">View</a></td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="revenue-source">
+                            <span class="revenue-source-icon"><i class="fas fa-building-columns"></i></span>
+                            <div>
+                                <strong>University Tutor Subscriptions</strong>
+                                <small>Recurring university support plan payments</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>Professional university plan pricing</td>
+                    <td>
+                        <strong><?= number_format($stats['university_active_subscriptions'] ?? 0) ?></strong> active subscriptions
+                    </td>
+                    <td class="text-end revenue-amount">MK <?= number_format($stats['university_subscription_revenue'] ?? 0) ?></td>
+                    <td class="text-end"><a href="<?= base_url('admin/university-tutor-subscriptions') ?>" class="revenue-metric-link">View</a></td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="revenue-source">
+                            <span class="revenue-source-icon"><i class="fas fa-plane-departure"></i></span>
+                            <div>
+                                <strong>Teach in Japan Applications</strong>
+                                <small>Application access payments</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>Professional application fee</td>
+                    <td>
+                        <strong><?= number_format($stats['japan_verified_payments_total'] ?? 0) ?></strong> verified
+                        <span class="text-muted">/ <?= number_format($stats['japan_applications_total'] ?? 0) ?> submitted</span>
+                    </td>
+                    <td class="text-end revenue-amount">MK <?= number_format($stats['japan_application_fees_total'] ?? 0) ?></td>
+                    <td class="text-end"><a href="<?= base_url('admin/japan-payments') ?>" class="revenue-metric-link">View</a></td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="revenue-source">
+                            <span class="revenue-source-icon"><i class="fas fa-file-invoice-dollar"></i></span>
+                            <div>
+                                <strong>Paid Past Papers</strong>
+                                <small>Resource purchase payments</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>Professional resource pricing</td>
+                    <td>
+                        <strong><?= number_format($stats['past_paper_verified_purchases_total'] ?? 0) ?></strong> purchases
+                        <span class="text-muted">/ <?= number_format($stats['paid_past_papers_total'] ?? 0) ?> paid papers</span>
+                    </td>
+                    <td class="text-end revenue-amount">MK <?= number_format($stats['past_paper_income_total'] ?? 0) ?></td>
+                    <td class="text-end"><a href="<?= base_url('admin/past-paper-payments') ?>" class="revenue-metric-link">View</a></td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2">Verified subscription payments processed</td>
+                    <td>PayChangu confirmed transactions</td>
+                    <td class="text-end revenue-amount">MK <?= number_format($stats['paychangu_revenue'] ?? 0) ?></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
     </div>
 </div>
 
@@ -423,6 +443,10 @@
     margin-top: 24px;
 }
 
+.revenue-report-card {
+    margin-top: 24px;
+}
+
 .money-overview-header {
     display: flex;
     align-items: flex-start;
@@ -543,8 +567,158 @@
     color: rgba(107, 114, 128, 0.7);
 }
 
+.revenue-report-table-wrap {
+    overflow-x: auto;
+}
+
+.revenue-report-table {
+    margin-bottom: 0;
+    min-width: 860px;
+}
+
+.revenue-report-table thead th {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    color: #475569;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 14px 12px;
+    text-transform: uppercase;
+}
+
+.revenue-report-table tbody td {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    color: #334155;
+    padding: 16px 12px;
+}
+
+.revenue-report-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.revenue-report-table tfoot td {
+    background: rgba(15, 23, 42, 0.03);
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 14px 12px;
+}
+
+.revenue-source {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 245px;
+}
+
+.revenue-source-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(30, 64, 175, 0.08);
+    color: var(--admin-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.revenue-source strong {
+    display: block;
+    color: #0f172a;
+    font-size: 14px;
+}
+
+.revenue-source small {
+    display: block;
+    color: #64748b;
+    margin-top: 3px;
+}
+
+.revenue-amount {
+    color: #0f172a !important;
+    font-size: 16px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
 .dashboard-section-heading {
     margin-bottom: 18px;
+}
+
+.reporting-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.reporting-card {
+    margin-bottom: 0;
+    padding: 22px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: none;
+}
+
+.reporting-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 16px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.reporting-label {
+    color: var(--admin-primary);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.reporting-card h4 {
+    margin: 0;
+    color: var(--text-dark);
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.reporting-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgba(30, 64, 175, 0.08);
+    color: var(--admin-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.reporting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    color: var(--text-light);
+    font-size: 14px;
+}
+
+.reporting-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.reporting-row strong {
+    color: var(--text-dark);
+    font-size: 18px;
+    white-space: nowrap;
 }
 
 .quick-actions-grid {
@@ -679,6 +853,10 @@
 }
 
 @media (max-width: 768px) {
+    .reporting-grid {
+        grid-template-columns: 1fr;
+    }
+
     .money-total-card {
         width: 100%;
         min-width: 0;

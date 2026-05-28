@@ -36,6 +36,7 @@ foreach ($available_plans as $plan) {
 }
 $current_plan_name = $current_plan ? safe($current_plan, 'name', 'Current Plan') : 'Current Plan';
 $current_plan_price = $current_plan ? floatval(safe($current_plan, 'price_monthly', 0)) : 0;
+$max_billing_months = isset($max_billing_months) ? max(1, (int) $max_billing_months) : 120;
 
 // Add current plan name and price to subscription array
 $subscription['current_plan'] = $current_plan_name;
@@ -363,6 +364,49 @@ if ($current_subscription) {
             border-radius: var(--border-radius);
             padding: 1.5rem;
             box-shadow: var(--shadow);
+        }
+
+        .multi-month-picker {
+            margin: 0.85rem 0 1rem;
+            text-align: left;
+        }
+
+        .multi-month-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.45rem;
+        }
+
+        .multi-month-input-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .multi-month-input {
+            width: 90px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.5rem 0.65rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            background: var(--bg-secondary);
+            text-align: center;
+        }
+
+        .multi-month-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(229, 92, 13, 0.12);
+        }
+
+        .multi-month-helper {
+            font-size: 0.82rem;
+            color: var(--text-light);
+            margin-top: 0.4rem;
         }
 
         .bottom-nav {
@@ -854,6 +898,23 @@ if ($current_subscription) {
                     </div>
                     <?php if($plan['price_monthly'] > 0): ?>
                         <div class="plan-period">per month</div>
+                        <div class="multi-month-picker">
+                            <label class="multi-month-label" for="months-plan-<?= $plan['id'] ?>">How many months do you want to pay for?</label>
+                            <div class="multi-month-input-wrap">
+                                <input
+                                    type="number"
+                                    class="multi-month-input"
+                                    id="months-plan-<?= $plan['id'] ?>"
+                                    min="1"
+                                    max="<?= $max_billing_months ?>"
+                                    step="1"
+                                    value="1"
+                                    inputmode="numeric"
+                                >
+                                <span class="small text-muted">months</span>
+                            </div>
+                            <div class="multi-month-helper">Pay now and extend your coverage for as many months as you choose.</div>
+                        </div>
                     <?php endif; ?>
 
                     <ul class="plan-features">
@@ -1070,6 +1131,22 @@ if ($current_subscription) {
                                                     <i class="fas fa-arrow-up me-1"></i>
                                                     Upgrade from <?= htmlspecialchars($subscription['current_plan']) ?>
                                                 </small>
+                                                <div class="mt-2">
+                                                    <label class="multi-month-label mb-1" for="upgrade-months-plan-<?= $plan['id'] ?>">Months to pay for</label>
+                                                    <div class="multi-month-input-wrap">
+                                                        <input
+                                                            type="number"
+                                                            class="multi-month-input"
+                                                            id="upgrade-months-plan-<?= $plan['id'] ?>"
+                                                            min="1"
+                                                            max="<?= $max_billing_months ?>"
+                                                            step="1"
+                                                            value="1"
+                                                            inputmode="numeric"
+                                                        >
+                                                        <span class="small text-muted">months</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <button type="button" class="btn btn-primary upgrade-btn"
                                                     data-plan-id="<?= $plan['id'] ?>"
@@ -1188,11 +1265,32 @@ if ($current_subscription) {
             const upgradeButtons = document.querySelectorAll('.upgrade-btn');
             const confirmCancelBtn = document.getElementById('confirmCancelBtn');
             const confirmCancelCheckbox = document.getElementById('confirmCancel');
+            const maxBillingMonths = <?= json_encode($max_billing_months) ?>;
+
+            function normalizeMonths(value) {
+                let months = parseInt(value, 10);
+
+                if (Number.isNaN(months) || months < 1) {
+                    months = 1;
+                }
+
+                if (months > maxBillingMonths) {
+                    months = maxBillingMonths;
+                }
+
+                return months;
+            }
 
             // Handle subscribe buttons - redirect to checkout page
             subscribeButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     const planId = this.getAttribute('data-plan-id');
+                    const monthsInput = document.getElementById(`months-plan-${planId}`);
+                    const months = normalizeMonths(monthsInput ? monthsInput.value : 1);
+
+                    if (monthsInput) {
+                        monthsInput.value = months;
+                    }
 
                     // Show loading spinner
                     this.disabled = true;
@@ -1201,7 +1299,7 @@ if ($current_subscription) {
 
                     // Redirect after a brief delay to show spinner
                     setTimeout(() => {
-                        window.location.href = `<?= base_url('trainer/checkout/subscription/') ?>${planId}`;
+                        window.location.href = `<?= base_url('trainer/checkout/subscription/') ?>${planId}?months=${months}`;
                     }, 300);
                 });
             });
@@ -1210,6 +1308,12 @@ if ($current_subscription) {
             upgradeButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     const planId = this.getAttribute('data-plan-id');
+                    const monthsInput = document.getElementById(`upgrade-months-plan-${planId}`);
+                    const months = normalizeMonths(monthsInput ? monthsInput.value : 1);
+
+                    if (monthsInput) {
+                        monthsInput.value = months;
+                    }
 
                     // Show loading spinner
                     this.disabled = true;
@@ -1218,7 +1322,7 @@ if ($current_subscription) {
 
                     // Redirect after a brief delay to show spinner
                     setTimeout(() => {
-                        window.location.href = `<?= base_url('trainer/checkout/subscription/') ?>${planId}`;
+                        window.location.href = `<?= base_url('trainer/checkout/subscription/') ?>${planId}?months=${months}`;
                     }, 300);
                 });
             });

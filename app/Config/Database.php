@@ -86,6 +86,7 @@ class Database extends Config
         $this->default['password'] = env('database.default.password', $this->default['password']);
         $this->default['database'] = env('database.default.database', $this->default['database']);
         $this->default['port'] = (int) env('database.default.port', (string) $this->default['port']);
+        $this->default['DBDebug'] = ENVIRONMENT !== 'production';
 
         // Ensure that we always set the database group to 'tests' if
         // we are currently running an automated test suite, so that

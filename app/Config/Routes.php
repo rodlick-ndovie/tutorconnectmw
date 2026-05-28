@@ -70,11 +70,28 @@ $routes->get('/', 'Home::index');
 $routes->get('how-it-works', 'Home::howItWorks');
 $routes->get('pricing', 'Home::pricing');
 $routes->get('find-tutors', 'Home::findTutors');
+$routes->get('university-college-support', 'UniversityCollegeSupport::index');
+$routes->get('university-college-support/register', 'UniversityCollegeSupport::register');
+$routes->get('university-college-support/register/back', 'UniversityCollegeSupport::registerBack');
+$routes->post('university-college-support/check-email', 'UniversityCollegeSupport::checkEmail');
+$routes->post('university-college-support/check-phone', 'UniversityCollegeSupport::checkPhone');
+$routes->post('university-college-support/check-username', 'UniversityCollegeSupport::checkUsername');
+$routes->post('university-college-support/registerStep1', 'UniversityCollegeSupport::registerStep1');
+$routes->post('university-college-support/registerStep2', 'UniversityCollegeSupport::registerStep2');
+$routes->post('university-college-support/register', 'UniversityCollegeSupport::storeRegistration');
+$routes->get('university-college-support/register/success/(:segment)', 'UniversityCollegeSupport::registrationSuccess/$1');
+$routes->get('university-college-support/request-lecture', 'UniversityCollegeSupport::requestLecture');
+$routes->post('university-college-support/request-lecture', 'UniversityCollegeSupport::storeLectureRequest');
+$routes->get('university-college-support/request-lecture/success/(:segment)', 'UniversityCollegeSupport::lectureRequestSuccess/$1');
+$routes->get('university-requests/accept/(:segment)', 'UniversityCollegeSupport::acceptLectureRequest/$1');
+$routes->get('request-tutor', 'ParentRequests::index');
+$routes->post('request-tutor', 'ParentRequests::store');
 $routes->get('request-teacher', 'ParentRequests::index');
 $routes->post('request-teacher', 'ParentRequests::store');
 $routes->get('request-teacher/success/(:segment)', 'ParentRequests::success/$1');
 $routes->get('parent-requests/apply/(:segment)', 'ParentRequests::apply/$1');
 $routes->get('tutor/(:any)', 'Home::tutorProfile/$1');
+$routes->get('university-tutor/(:num)', 'Home::universityTutorProfile/$1');
 $routes->get('login', 'Home::login');
 $routes->post('login', 'Auth::attemptLogin');
 
@@ -115,11 +132,20 @@ $routes->post('register/tutor', 'Auth::attemptTutorRegister');
 
 $routes->get('logout', 'Auth::logout');
 
-// Redirect /dashboard to /trainer/dashboard for authenticated users
+// Redirect /dashboard to the correct authenticated portal
 $routes->get('dashboard', function() {
     if (!session()->get('user_id')) {
         return redirect()->to('/login');
     }
+
+    if (in_array(session()->get('role'), ['admin', 'sub-admin'], true)) {
+        return redirect()->to('/admin/dashboard');
+    }
+
+    if (session()->get('portal_type') === 'university') {
+        return redirect()->to('/university-portal/dashboard');
+    }
+
     return redirect()->to('/trainer/dashboard');
 });
 
@@ -225,6 +251,20 @@ $routes->group('resources', static function ($routes) {
 $routes->get('resources/past-papers', 'Resources::pastPapers');
 $routes->get('resources/video-solutions', 'Resources::videoSolutions');
 
+    // University Portal Routes
+    $routes->group('university-portal', ['filter' => 'auth'], static function ($routes) {
+        $routes->get('/', 'UniversityPortal::dashboard');
+        $routes->get('dashboard', 'UniversityPortal::dashboard');
+        $routes->get('complete-profile', 'UniversityPortal::completeProfile');
+        $routes->post('complete-profile/draft', 'UniversityPortal::saveProfileDraft');
+        $routes->post('complete-profile', 'UniversityPortal::saveProfile');
+        $routes->get('subscription', 'UniversityPortal::subscription');
+        $routes->get('checkout/subscription/(:num)', 'Checkout::subscription/$1');
+        $routes->post('checkout/process-subscription', 'Checkout::processSubscription');
+        $routes->get('checkout/paychangu/return', 'Checkout::paychanguReturn');
+        $routes->post('checkout/checkPaymentStatus', 'Checkout::checkPaymentStatus');
+    });
+
     // Trainer Routes
     $routes->group('trainer', ['filter' => 'auth'], static function ($routes) {
         $routes->post('send-message', 'Trainer::sendMessage');
@@ -270,10 +310,26 @@ $routes->get('resources/video-solutions', 'Resources::videoSolutions');
     });
 
 // PayChangu callback - No auth required (called by PayChangu servers)
+$routes->get('checkout/paychangu/success', 'Checkout::paychanguReturn');
 $routes->match(['GET', 'POST'], 'checkout/paychangu/callback', 'Checkout::paychanguCallback');
 
 // Admin Routes
-$routes->group('admin', ['filter' => 'auth'], static function ($routes) {
+$routes->group('admin', ['filter' => 'auth:sub-admin'], static function ($routes) {
+        // University & College Support admin management
+        $routes->get('university-college-tutors', 'Admin::universityCollegeTutors');
+        $routes->get('view-university-college-tutor/(:num)', 'Admin::viewUniversityCollegeTutor/$1');
+        $routes->get('approve-university-college-tutor/(:num)', 'Admin::approveUniversityCollegeTutor/$1');
+        $routes->get('reject-university-college-tutor/(:num)', 'Admin::rejectUniversityCollegeTutor/$1');
+        $routes->post('delete-university-college-tutor/(:num)', 'Admin::deleteUniversityCollegeTutor/$1');
+        $routes->get('export-university-college-tutors-excel', 'Admin::exportUniversityCollegeTutorsExcel');
+        $routes->get('export-university-college-tutors-pdf', 'Admin::exportUniversityCollegeTutorsPdf');
+        $routes->get('university-lecture-requests', 'Admin::universityLectureRequests');
+        $routes->get('view-university-lecture-request/(:num)', 'Admin::viewUniversityLectureRequest/$1');
+        $routes->post('update-university-lecture-request-status/(:num)', 'Admin::updateUniversityLectureRequestStatus/$1');
+        $routes->get('export-university-lecture-requests-excel', 'Admin::exportUniversityLectureRequestsExcel');
+        $routes->get('export-university-lecture-requests-pdf', 'Admin::exportUniversityLectureRequestsPdf');
+        $routes->get('university-request-matches', 'Admin::universityRequestMatches');
+        $routes->get('university-request-matches/(:num)', 'Admin::viewUniversityRequestMatch/$1');
     $routes->get('/', 'Dashboard::index');
     $routes->get('dashboard', 'Dashboard::index');
 
@@ -281,6 +337,9 @@ $routes->group('admin', ['filter' => 'auth'], static function ($routes) {
     $routes->get('users', 'Admin::users');
     $routes->get('users/export', 'Admin::exportUsersExcel');
     $routes->get('users/export-pdf', 'Admin::exportUsersPdf');
+    $routes->post('users/update/(:num)', 'Admin::updateUser/$1');
+    $routes->post('users/toggle-status/(:num)', 'Admin::toggleUserStatus/$1');
+    $routes->post('users/delete/(:num)', 'Admin::deleteUser/$1');
     $routes->post('check-field', 'Admin::checkField');
     $routes->post('create-admin', 'Admin::createAdmin');
     $routes->post('create-trainer', 'Admin::createTrainer');
@@ -338,6 +397,12 @@ $routes->group('admin', ['filter' => 'auth'], static function ($routes) {
     $routes->get('subscriptions/get/(:num)', 'Admin::getPlan/$1');
     $routes->post('subscriptions/update/(:num)', 'Admin::updatePlan/$1');
     $routes->post('subscriptions/delete/(:num)', 'Admin::deletePlan/$1');
+    $routes->get('university-subscriptions', 'Admin::universitySubscriptions');
+    $routes->get('university-subscriptions/add', 'Admin::addUniversityPlan');
+    $routes->post('university-subscriptions/create', 'Admin::createPlan');
+    $routes->get('university-subscriptions/edit/(:num)', 'Admin::editUniversityPlan/$1');
+    $routes->post('university-subscriptions/update/(:num)', 'Admin::updatePlan/$1');
+    $routes->post('university-subscriptions/delete/(:num)', 'Admin::deleteUniversityPlan/$1');
 
     // Database backup routes
     $routes->get('backup', 'Admin::backup');
@@ -347,6 +412,7 @@ $routes->group('admin', ['filter' => 'auth'], static function ($routes) {
 
     // Tutor subscriptions management
     $routes->get('tutor-subscriptions', 'Admin::tutorSubscriptions');
+    $routes->get('university-tutor-subscriptions', 'Admin::universityTutorSubscriptions');
     $routes->post('tutor-subscriptions/assign', 'Admin::assignSubscription');
     $routes->post('tutor-subscriptions/update-status/(:num)', 'Admin::updateSubscriptionStatus/$1');
     $routes->post('tutor-subscriptions/remove/(:num)', 'Admin::removeSubscription/$1');

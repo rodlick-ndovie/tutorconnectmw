@@ -661,8 +661,10 @@
                     <div class="terms-checkbox">
                         <input type="checkbox" id="terms" name="terms_accepted" required>
                         <label for="terms" class="small text-muted">
-                            I agree to the <a href="<?= base_url('terms-of-service') ?>" class="text-primary" target="_blank">Terms of Service</a> and
-                            <a href="<?= base_url('refund-policy') ?>" class="text-primary" target="_blank">Refund Policy</a>.
+                            I confirm that I have read and agree to the
+                            <a href="<?= base_url('terms-of-service') ?>" class="text-primary" target="_blank" rel="noopener">Terms of Service</a>,
+                            <a href="<?= base_url('privacy-policy') ?>" class="text-primary" target="_blank" rel="noopener">Privacy Policy</a>, and
+                            <a href="<?= base_url('refund-policy') ?>" class="text-primary" target="_blank" rel="noopener">Refund Policy</a>.
                             Payment will be processed immediately through PayChangu, and account verification is completed once payment succeeds.
                         </label>
                     </div>
@@ -926,10 +928,11 @@
         });
 
         // Function to check payment status after modal closes
-        function checkPaymentStatusAfterModal(txRef) {
+        function checkPaymentStatusAfterModal(txRef, attempt = 1) {
             console.log('Checking payment status after modal close for tx_ref:', txRef);
             const submitBtn = document.getElementById('submitBtn');
             const btnText = document.getElementById('btnText');
+            const maxAttempts = 24;
 
             // Check immediately
             fetch('<?= base_url('trainer/checkout/checkPaymentStatus') ?>', {
@@ -954,18 +957,26 @@
                     alert('Payment was not successful. Please try again.');
                     submitBtn.disabled = false;
                     btnText.innerHTML = '<i class="fas fa-lock"></i> Submit Payment';
+                } else if (attempt >= maxAttempts) {
+                    alert('We could not confirm this payment yet. If money was deducted, please contact support with your transaction reference: ' + txRef);
+                    submitBtn.disabled = false;
+                    btnText.innerHTML = '<i class="fas fa-lock"></i> Submit Payment';
                 } else {
                     // Still processing - check again in 2 seconds
                     console.log('Payment still processing, checking again in 2 seconds...');
-                    setTimeout(() => checkPaymentStatusAfterModal(txRef), 2000);
+                    setTimeout(() => checkPaymentStatusAfterModal(txRef, attempt + 1), 2000);
                 }
             })
             .catch(error => {
                 console.error('Error checking payment status:', error);
-                // If we can't check status, assume payment might have succeeded and redirect
-                // This is safer than keeping user in limbo
-                console.log('Assuming payment success due to check error, redirecting...');
-                window.location.href = '<?= base_url('checkout/paychangu/success?tx_ref=') ?>' + encodeURIComponent(txRef);
+                if (attempt >= maxAttempts) {
+                    alert('We could not confirm this payment yet. If money was deducted, please contact support with your transaction reference: ' + txRef);
+                    submitBtn.disabled = false;
+                    btnText.innerHTML = '<i class="fas fa-lock"></i> Submit Payment';
+                    return;
+                }
+
+                setTimeout(() => checkPaymentStatusAfterModal(txRef, attempt + 1), 2000);
             });
         }
     </script>

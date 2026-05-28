@@ -281,6 +281,7 @@
                 <div class="hidden lg:flex lg:items-center lg:justify-end lg:gap-1 flex-1">
                     <a href="<?= site_url('/') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Home</a>
                     <a href="<?= site_url('resources') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Resources</a>
+                    <a href="<?= site_url('university-college-support') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">University Support</a>
                     <a href="<?= site_url('teach-in-japan') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Teach in Japan</a>
                     <!--<a href="<?= site_url('how-it-works') ?>" class="text-secondary hover:text-primary px-3 py-2 font-medium transition-colors">How It Works</a>-->
                     <a href="<?= site_url('pricing') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Pricing</a>
@@ -288,8 +289,8 @@
                     <a href="<?= site_url('find-tutors') ?>" class="text-sm text-secondary hover:text-primary px-2.5 py-2 font-medium rounded-md hover:bg-orange-50 transition-colors">Find Teachers</a>
 
                     <div class="ml-3 flex items-center gap-2 border-l border-gray-200 pl-3">
-                        <a href="<?= site_url('request-teacher') ?>" class="inline-flex items-center rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
-                            Request Teacher
+                        <a href="<?= site_url('request-tutor') ?>" class="inline-flex items-center rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
+                            Request Tutor
                         </a>
                         <a href="<?= site_url('login') ?>" class="inline-flex items-center rounded-md border border-gray-300 px-3.5 py-2 text-sm font-semibold text-secondary hover:border-primary hover:text-primary transition-colors">
                             <i class="fas fa-sign-in-alt mr-1.5 text-xs"></i> Login
@@ -298,8 +299,8 @@
                 </div>
 
                 <div class="hidden md:flex lg:hidden items-center gap-2">
-                    <a href="<?= site_url('request-teacher') ?>" class="inline-flex items-center rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
-                        Request Teacher
+                    <a href="<?= site_url('request-tutor') ?>" class="inline-flex items-center rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors">
+                        Request Tutor
                     </a>
                 </div>
 
@@ -343,6 +344,10 @@
                 <i class="fas fa-book mr-2 text-sm text-slate-600"></i>
                 <span class="text-sm">Resources</span>
             </a>
+            <a href="<?= site_url('university-college-support') ?>" onclick="toggleOffcanvas()" class="w-full max-w-xs px-4 py-2.5 text-secondary hover:bg-slate-50 hover:text-primary rounded-lg font-medium transition-all duration-200 flex items-center justify-center border border-slate-200">
+                <i class="fas fa-user-graduate mr-2 text-sm text-slate-600"></i>
+                <span class="text-sm">University Support</span>
+            </a>
             <a href="<?= site_url('teach-in-japan') ?>" onclick="toggleOffcanvas()" class="w-full max-w-xs px-4 py-2.5 text-secondary hover:bg-slate-50 hover:text-primary rounded-lg font-medium transition-all duration-200 flex items-center justify-center border border-slate-200">
                 <i class="fas fa-plane-departure mr-2 text-sm text-slate-600"></i>
                 <span class="text-sm">Teach in Japan</span>
@@ -363,9 +368,9 @@
                 <i class="fas fa-search mr-2 text-sm text-slate-600"></i>
                 <span class="text-sm">Find Teachers</span>
             </a>
-            <a href="<?= site_url('request-teacher') ?>" onclick="toggleOffcanvas()" class="w-full max-w-xs px-4 py-2.5 text-secondary hover:bg-slate-50 hover:text-primary rounded-lg font-medium transition-all duration-200 flex items-center justify-center border border-slate-200">
+            <a href="<?= site_url('request-tutor') ?>" onclick="toggleOffcanvas()" class="w-full max-w-xs px-4 py-2.5 text-secondary hover:bg-slate-50 hover:text-primary rounded-lg font-medium transition-all duration-200 flex items-center justify-center border border-slate-200">
                 <i class="fas fa-paper-plane mr-2 text-sm text-slate-600"></i>
-                <span class="text-sm">Request Teacher</span>
+                <span class="text-sm">Request Tutor</span>
             </a>
 
             <!-- Divider -->
@@ -442,9 +447,11 @@
                     <ul class="space-y-3">
                         <li><a href="<?= site_url('resources/past-papers') ?>" class="text-gray-600 hover:text-primary">Past Papers</a></li>
                         <li><a href="<?= site_url('resources/video-solutions') ?>" class="text-gray-600 hover:text-primary">Video Solutions</a></li>
+                        <li><a href="<?= site_url('university-college-support') ?>" class="text-gray-600 hover:text-primary">University Support</a></li>
+                        <li><a href="<?= site_url('request-tutor?type=university') ?>" class="text-gray-600 hover:text-primary">Request University Support</a></li>
                         <li><a href="<?= site_url('teach-in-japan') ?>" class="text-gray-600 hover:text-primary">Teach in Japan</a></li>
                         <li><a href="<?= site_url('find-tutors') ?>" class="text-gray-600 hover:text-primary">Find Teachers</a></li>
-                        <li><a href="<?= site_url('request-teacher') ?>" class="text-gray-600 hover:text-primary">Request Teacher</a></li>
+                        <li><a href="<?= site_url('request-tutor') ?>" class="text-gray-600 hover:text-primary">Request Tutor</a></li>
                         <li><a href="<?= site_url('pricing') ?>" class="text-gray-600 hover:text-primary">Pricing</a></li>
                     </ul>
                 </div>

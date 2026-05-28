@@ -287,6 +287,10 @@
                     <span class="nav-icon"><i class="fas fa-chalkboard-teacher"></i></span>
                     Tutors
                 </a>
+                <a href="<?php echo base_url('admin/university-college-tutors'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'university_tutors') ? 'active' : ''; ?>">
+                    <span class="nav-icon"><i class="fas fa-university"></i></span>
+                    University Tutors
+                </a>
                 <a href="<?php echo base_url('admin/renewal-management'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'renewal_management') ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-bell"></i></span>
                     Renewal Management
@@ -310,6 +314,10 @@
                     <span class="nav-icon"><i class="fas fa-list-check"></i></span>
                     Parent Requests
                 </a>
+                <a href="<?php echo base_url('admin/university-request-matches'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'university_request_matches') ? 'active' : ''; ?>">
+                    <span class="nav-icon"><i class="fas fa-building-columns"></i></span>
+                    University Requests
+                </a>
                 <a href="<?php echo base_url('admin/japan-applications'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'japan_applications') ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-plane-departure"></i></span>
                     Japan Applications
@@ -318,13 +326,21 @@
             <div class="nav-section">
                 <div class="nav-section-title">Business</div>
 
-                <a href="<?php echo base_url('admin/subscriptions'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'subscriptions') ? 'active' : ''; ?>">
+                <a href="<?php echo base_url('admin/subscriptions'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'subscriptions' && (($portal_type ?? 'trainer') !== 'university')) ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-tags"></i></span>
-                    Subscription Plans
+                    Tutor Plans
                 </a>
-                <a href="<?php echo base_url('admin/tutor-subscriptions'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'tutor_subscriptions') ? 'active' : ''; ?>">
+                <a href="<?php echo base_url('admin/university-subscriptions'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'subscriptions' && (($portal_type ?? '') === 'university')) ? 'active' : ''; ?>">
+                    <span class="nav-icon"><i class="fas fa-building-columns"></i></span>
+                    University Plans
+                </a>
+                <a href="<?php echo base_url('admin/tutor-subscriptions'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'tutor_subscriptions' && (($portal_type ?? 'trainer') !== 'university')) ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-users-cog"></i></span>
                     Tutor Subscriptions
+                </a>
+                <a href="<?php echo base_url('admin/university-tutor-subscriptions'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'tutor_subscriptions' && (($portal_type ?? '') === 'university')) ? 'active' : ''; ?>">
+                    <span class="nav-icon"><i class="fas fa-building-user"></i></span>
+                    University Subscriptions
                 </a>
                 <a href="<?php echo base_url('admin/past-paper-payments'); ?>" class="nav-item <?php echo (isset($active_page) && $active_page === 'past_paper_payments') ? 'active' : ''; ?>">
                     <span class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></span>
@@ -380,6 +396,13 @@
         <?php if (session()->has('error')): ?>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <i class="fas fa-exclamation-triangle me-2"></i><?php echo session('error'); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <?php endif; ?>
+
+        <?php if (session()->has('info')): ?>
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="fas fa-info-circle me-2"></i><?php echo session('info'); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
         <?php endif; ?>

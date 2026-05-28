@@ -62,7 +62,7 @@
             <?php endif; ?>
 
             <div class="mt-7 flex flex-col sm:flex-row gap-3">
-                <a href="<?= site_url('request-teacher') ?>" class="inline-flex justify-center rounded-lg bg-primary px-5 py-3 text-white font-bold hover:bg-red-600 transition">
+                <a href="<?= site_url('request-tutor') ?>" class="inline-flex justify-center rounded-lg bg-primary px-5 py-3 text-white font-bold hover:bg-red-600 transition">
                     Submit Another Request
                 </a>
                 <a href="<?= site_url('find-tutors') ?>" class="inline-flex justify-center rounded-lg border border-gray-300 px-5 py-3 text-gray-700 font-semibold hover:bg-gray-50 transition">

@@ -36,7 +36,7 @@ $formatSubjects = static function (array $subjects): string {
         <h1 class="page-title">Parent Requests</h1>
         <p class="page-subtitle">Track requests submitted by parents and review matched tutors.</p>
     </div>
-    <a class="btn-admin" href="<?= site_url('request-teacher') ?>" target="_blank" rel="noopener">
+    <a class="btn-admin" href="<?= site_url('request-tutor') ?>" target="_blank" rel="noopener">
         <i class="fas fa-plus me-2"></i>Open Request Form
     </a>
 </div>

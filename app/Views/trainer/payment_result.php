@@ -446,8 +446,12 @@
     <script>
         // Poll for payment status updates
         let pollInterval;
+        let pollAttempts = 0;
+        const maxPollAttempts = 24;
 
         function checkPaymentStatus() {
+            pollAttempts++;
+
             fetch('<?= base_url('trainer/checkout/checkPaymentStatus') ?>', {
                 method: 'POST',
                 headers: {
@@ -466,6 +470,12 @@
                     // Payment failed - reload page to show error
                     clearInterval(pollInterval);
                     location.reload();
+                } else if (pollAttempts >= maxPollAttempts) {
+                    clearInterval(pollInterval);
+                    const statusChecker = document.getElementById('status-checker');
+                    if (statusChecker) {
+                        statusChecker.innerHTML = '<p style="color: var(--text-light); font-size: 0.95rem;">We could not confirm this payment yet. If money was deducted, please contact support with your transaction reference.</p>';
+                    }
                 }
                 // Continue polling for other statuses
             })

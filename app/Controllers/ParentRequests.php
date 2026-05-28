@@ -11,6 +11,48 @@ use App\Models\User;
 
 class ParentRequests extends BaseController
 {
+    private const UNIVERSITY_SERVICE_CATEGORIES = [
+        'Research & Dissertation Support' => [
+            'Methodology guidance',
+            'Data cleaning',
+            'Proposal structuring',
+            'Referencing support',
+            'Data analysis interpretation',
+        ],
+        'ICT & Programming' => [
+            'Python',
+            'Java',
+            'Web Development',
+            'Database Systems',
+            'Microsoft Excel',
+            'Power BI Basics',
+            'Data Science Basics',
+            'Introduction to AI Tools',
+            'Data Visualization',
+        ],
+        'Accounting & Finance' => [
+            'Financial Accounting',
+            'Cost Accounting',
+            'Taxation Basics',
+            'Economics',
+            'Finance',
+        ],
+        'Mathematics' => [
+            'Calculus',
+            'Algebra',
+            'Engineering Mathematics',
+            'Business Mathematics',
+        ],
+        'Statistics & Data Analysis' => [
+            'SPSS',
+            'STATA',
+            'Excel Data Analysis',
+            'Quantitative Methods',
+            'Research Methods',
+            'Data Analysis for Dissertations',
+        ],
+    ];
+
     private const BUDGET_OPTIONS = [
         '5000-10000-week' => [
             'min' => 5000,
@@ -47,8 +89,11 @@ class ParentRequests extends BaseController
     public function index()
     {
         $data = $this->getFormData();
-        $data['title'] = 'Request a Teacher - TutorConnect Malawi';
-        $data['description'] = 'Submit a parent request and reach matching verified teachers on TutorConnect Malawi.';
+        $data['title'] = 'Request a Tutor - TutorConnect Malawi';
+        $data['description'] = 'Submit one request and choose whether you need a school teacher or university academic specialist.';
+        $data['serviceCategories'] = array_keys(self::UNIVERSITY_SERVICE_CATEGORIES);
+        $data['serviceCategoryMap'] = self::UNIVERSITY_SERVICE_CATEGORIES;
+        $data['selectedRequestType'] = $this->request->getGet('type') === 'university' ? 'university' : 'school';
 
         return view('parent_requests/form', $data);
     }
@@ -56,7 +101,7 @@ class ParentRequests extends BaseController
     public function store()
     {
         if (strtolower($this->request->getMethod()) !== 'post') {
-            return redirect()->to(site_url('request-teacher'));
+            return redirect()->to(site_url('request-tutor'));
         }
 
         $postData = $this->request->getPost();

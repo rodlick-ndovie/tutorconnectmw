@@ -106,10 +106,12 @@ class TutorModel extends Model
 
         $builder = $this->select('users.*')
                        ->join('tutor_subscriptions', 'tutor_subscriptions.user_id = users.id', 'left')
+                       ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
                        ->where('users.role', 'trainer')           // Only trainers
                        ->where('users.tutor_status', 'approved')   // Approved tutors
                        ->where('users.is_verified', 1)           // Must be verified
                        ->where('users.is_active', 1)             // User account must be active
+                       ->where('uct.id', null)
                        ->where('tutor_subscriptions.status', 'active')
                        ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                        ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
@@ -158,7 +160,9 @@ class TutorModel extends Model
         // Debug: Check what tutors exist in database
         $allTutors = $this->select('users.id, users.first_name, users.last_name, users.tutor_status, users.is_verified, users.is_active, tutor_subscriptions.status as sub_status, tutor_subscriptions.current_period_end')
                          ->join('tutor_subscriptions', 'tutor_subscriptions.user_id = users.id', 'left')
+                         ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
                          ->where('users.role', 'trainer')
+                         ->where('uct.id', null)
                          ->findAll();
 
         log_message('info', 'All tutors in database: ' . count($allTutors));
@@ -207,10 +211,12 @@ class TutorModel extends Model
             // First check what tutors exist that meet basic criteria
             $allEligible = $this->select('users.id, users.search_count, users.first_name, users.last_name, users.featured')
                                ->join('tutor_subscriptions', 'tutor_subscriptions.user_id = users.id', 'left')
+                               ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
                                ->where('users.role', 'trainer')
                                ->where('users.tutor_status', 'active')
                                ->where('users.is_verified', 1)
                                ->where('users.is_active', 1)
+                               ->where('uct.id', null)
                                ->where('tutor_subscriptions.status', 'active')
                                ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                                ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
@@ -224,10 +230,12 @@ class TutorModel extends Model
 
             $results = $this->select('users.*')
                            ->join('tutor_subscriptions', 'tutor_subscriptions.user_id = users.id', 'left')
+                           ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
                            ->where('users.role', 'trainer')
                            ->where('users.tutor_status', 'active')
                            ->where('users.is_verified', 1)
                            ->where('users.is_active', 1)
+                           ->where('uct.id', null)
                            ->where('tutor_subscriptions.status', 'active')
                            ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                            ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
@@ -255,9 +263,11 @@ class TutorModel extends Model
             $results = $this->select('users.*, tutor_subscriptions.plan_id, subscription_plans.name as plan_name, subscription_plans.search_ranking, subscription_plans.badge_level, subscription_plans.max_subjects')
                            ->join('tutor_subscriptions', 'tutor_subscriptions.user_id = users.id', 'left')
                            ->join('subscription_plans', 'subscription_plans.id = tutor_subscriptions.plan_id', 'left')
+                           ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
                            ->where('users.role', 'trainer')
                            ->where('users.is_verified', 1)
                            ->where('users.is_active', 1)
+                           ->where('uct.id', null)
                            ->where('users.rating >=', 4.0)  // Only tutors with 4+ rating
                            ->where('users.review_count >=', 1)  // At least 1 review
                            ->where('tutor_subscriptions.status', 'active')

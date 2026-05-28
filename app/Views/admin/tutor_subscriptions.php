@@ -3,6 +3,10 @@
 <?php $active_page = 'tutor_subscriptions'; ?>
 <?php $title = $title ?? 'Tutor Subscriptions - TutorConnect Malawi'; ?>
 <?php
+$portalType = $portal_type ?? 'trainer';
+$portalLabel = $portal_label ?? 'Tutor';
+$subscriptionUrl = $subscription_url ?? site_url('admin/tutor-subscriptions');
+$plansUrl = $portalType === 'university' ? site_url('admin/university-subscriptions') : site_url('admin/subscriptions');
 $expiredSubscriptions = array_values(array_filter($subscriptions ?? [], static function ($subscription) {
     return strtolower((string) ($subscription['display_status'] ?? $subscription['status'] ?? '')) === 'expired';
 }));
@@ -363,8 +367,8 @@ $expiredPreview = array_slice($expiredSubscriptions, 0, 5);
 
 <!-- Page Header -->
 <div class="mb-4">
-    <h1 class="h2 mb-2 text-gray-800 font-weight-bold">Tutor Subscriptions Management</h1>
-    <p class="text-muted mb-4">Monitor and manage tutor subscription assignments, payments, and status</p>
+    <h1 class="h2 mb-2 text-gray-800 font-weight-bold"><?= esc($portalLabel) ?> Subscriptions Management</h1>
+    <p class="text-muted mb-4">Monitor and manage subscription assignments, payments, and status for <?= esc(strtolower($portalLabel)) ?> accounts only.</p>
 </div>
 
 <?php if (!empty($expiredSubscriptions)): ?>
@@ -407,7 +411,7 @@ $expiredPreview = array_slice($expiredSubscriptions, 0, 5);
             <?php endif; ?>
         </div>
 
-        <a href="<?= site_url('admin/tutor-subscriptions') ?>" class="btn-admin" style="align-self: center;">
+        <a href="<?= esc($subscriptionUrl) ?>" class="btn-admin" style="align-self: center;">
             <i class="fas fa-sync-alt"></i>
             <span>Review Renewals</span>
         </a>
@@ -442,6 +446,14 @@ $expiredPreview = array_slice($expiredSubscriptions, 0, 5);
     </div>
 
     <div class="stat-card info">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+            <i class="fas fa-chalkboard-teacher"></i>
+        </div>
+        <div class="stat-number"><?= $stats['regular_active_subscriptions'] ?? 0 ?></div>
+        <div class="stat-label">Active Tutor Plans</div>
+    </div>
+
+    <div class="stat-card info">
         <div class="stat-icon">
             <i class="fas fa-money-bill-wave"></i>
         </div>
@@ -456,7 +468,7 @@ $expiredPreview = array_slice($expiredSubscriptions, 0, 5);
         <i class="fas fa-user-plus"></i>
         <span>Assign Subscription</span>
     </button>
-    <a href="<?= site_url('admin/subscriptions') ?>" class="btn-admin secondary">
+    <a href="<?= esc($plansUrl) ?>" class="btn-admin secondary">
         <i class="fas fa-dollar-sign"></i>
         <span>Manage Plans</span>
     </a>
@@ -465,8 +477,8 @@ $expiredPreview = array_slice($expiredSubscriptions, 0, 5);
 <!-- Subscriptions Table -->
 <div class="data-table-container">
     <div class="data-table-header">
-        <h2 class="data-table-title">Tutor Subscriptions</h2>
-        <p class="data-table-subtitle">Complete overview of all tutor subscription assignments and status</p>
+        <h2 class="data-table-title"><?= esc($portalLabel) ?> Subscriptions</h2>
+        <p class="data-table-subtitle">Trainer subscription records and renewals.</p>
     </div>
     <div class="data-table-content">
         <table class="subscription-table" id="subscriptionsTable">
@@ -618,32 +630,13 @@ $expiredPreview = array_slice($expiredSubscriptions, 0, 5);
                         <label for="user_id" class="form-label">Select Tutor *</label>
                         <select class="form-select" id="user_id" name="user_id" required>
                             <option value="">Choose a tutor...</option>
-                            <?php
-                            // Get tutors who don't have active subscriptions
-                            $tutorModel = new \App\Models\TutorModel();
-                            $userModel = new \App\Models\User();
-                            $existingSubscriptions = array_column($subscriptions, 'user_id');
-
-                            $tutors = $tutorModel->findAll();
-                            $availableTutors = [];
-
-                            foreach ($tutors as $tutor) {
-                                if (!in_array($tutor['id'], $existingSubscriptions)) {
-                                    $user = $userModel->find($tutor['id']);
-                                    if ($user) {
-                                        $availableTutors[] = $user;
-                                    }
-                                }
-                            }
-
-                            foreach ($availableTutors as $user):
-                            ?>
+                            <?php foreach (($assignable_tutors ?? []) as $user): ?>
                                 <option value="<?= $user['id'] ?>">
-                                    <?= esc($user['first_name'] . ' ' . $user['last_name']) ?> (<?= esc($user['email']) ?>)
+                                    <?= esc($user['first_name'] . ' ' . $user['last_name']) ?> (<?= esc($user['email']) ?>) - <?= esc($user['admin_role_label'] ?? 'Tutor') ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text">Only tutors without active subscriptions are shown</div>
+                        <div class="form-text">Only trainer tutors without an active or pending subscription are shown.</div>
                     </div>
                     <div class="mb-3">
                         <label for="plan_id" class="form-label">Subscription Plan *</label>
@@ -906,7 +899,7 @@ function viewPaymentProof(subscriptionId) {
 $(document).ready(function() {
     if ($.fn.DataTable) {
         $('#subscriptionsTable').DataTable({
-            "order": [[4, 'desc']], // Sort by current period (descending)
+            "order": [[6, 'desc']], // Sort by current period (descending)
             "pageLength": 25
         });
     }

@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\TutorModel;
+use App\Models\UniversityCollegeTutorModel;
 use App\Models\User;
 
 class Home extends BaseController
@@ -18,40 +19,47 @@ class Home extends BaseController
 
             // Get recent verified tutors instead of requiring "most searched"
             $recentTutors = $this->getRecentActiveTutors(6);
+            $universityTutors = $this->getApprovedUniversityTutors(6);
             $featured = $tutorModel->getFeatured(4);
 
             // Get usage statistics for homepage display
             $totalProfileViews = $usageTrackingModel->getTotalUsageCount('profile_views');
             $totalContactClicks = $usageTrackingModel->getTotalUsageCount('clicks');
             $totalActiveTutors = $db->table('users')
-                                   ->where('role', 'trainer')
-                                   ->where('tutor_status', 'approved')
-                                   ->where('is_verified', 1)
-                                   ->where('is_active', 1)
+                                   ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
+                                   ->where('users.role', 'trainer')
+                                   ->where('users.tutor_status', 'approved')
+                                   ->where('users.is_verified', 1)
+                                   ->where('users.is_active', 1)
+                                   ->where('uct.id', null)
                                    ->countAllResults();
 
             // Get unique filter options from database for search form
             // Districts - get distinct districts from active tutors
             $districts = $db->table('users')
-                           ->select('district')
-                           ->where('role', 'trainer')
-                           ->where('tutor_status', 'approved')
-                           ->where('is_verified', 1)
-                           ->where('is_active', 1)
-                           ->where('district !=', '')
-                           ->groupBy('district')
-                           ->orderBy('district', 'ASC')
+                           ->select('users.district')
+                           ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
+                           ->where('users.role', 'trainer')
+                           ->where('users.tutor_status', 'approved')
+                           ->where('users.is_verified', 1)
+                           ->where('users.is_active', 1)
+                           ->where('uct.id', null)
+                           ->where('users.district !=', '')
+                           ->groupBy('users.district')
+                           ->orderBy('users.district', 'ASC')
                            ->get()
                            ->getResultArray();
 
             // Get unique curricula from structured_subjects JSON field
             $structuredResults = $db->table('users')
-                              ->select('structured_subjects')
-                              ->where('role', 'trainer')
-                              ->where('tutor_status', 'approved')
-                              ->where('is_verified', 1)
-                              ->where('is_active', 1)
-                              ->where('structured_subjects !=', '')
+                              ->select('users.structured_subjects')
+                              ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
+                              ->where('users.role', 'trainer')
+                              ->where('users.tutor_status', 'approved')
+                              ->where('users.is_verified', 1)
+                              ->where('users.is_active', 1)
+                              ->where('uct.id', null)
+                              ->where('users.structured_subjects !=', '')
                               ->get()
                               ->getResultArray();
 
@@ -108,6 +116,7 @@ class Home extends BaseController
 
             $data = [
                 'mostSearched' => $recentTutors, // Show recent tutors instead of just most searched
+                'university_tutors' => $universityTutors,
                 'featured' => $featured,
                 'districts' => array_column($districts, 'district'),
                 'curricula' => $curricula,
@@ -125,6 +134,7 @@ class Home extends BaseController
             // If database isn't ready, show empty data
             $data = [
                 'mostSearched' => [],
+                'university_tutors' => [],
                 'featured' => [],
                 'districts' => [],
                 'curricula' => [],
@@ -151,10 +161,12 @@ class Home extends BaseController
                    ->select('users.*, tutor_subscriptions.plan_id, subscription_plans.name as plan_name, subscription_plans.search_ranking, subscription_plans.badge_level, subscription_plans.max_subjects')
                    ->join('tutor_subscriptions', 'tutor_subscriptions.user_id = users.id', 'left')
                    ->join('subscription_plans', 'subscription_plans.id = tutor_subscriptions.plan_id', 'left')
+                   ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
                    ->where('users.role', 'trainer')
                    ->where('users.tutor_status', 'approved')
                    ->where('users.is_verified', 1)
                    ->where('users.is_active', 1)
+                   ->where('uct.id', null)
                    ->where('tutor_subscriptions.status', 'active')
                    ->where('tutor_subscriptions.current_period_start <=', date('Y-m-d H:i:s'))
                    ->where('tutor_subscriptions.current_period_end >=', date('Y-m-d H:i:s'))
@@ -215,6 +227,61 @@ class Home extends BaseController
         return $tutors;
     }
 
+    private function getApprovedUniversityTutors(int $limit = 6): array
+    {
+        $db = \Config\Database::connect();
+        $now = date('Y-m-d H:i:s');
+
+        $query = $db->table('university_college_tutors uct')
+            ->select('uct.id, uct.full_name, uct.email, uct.phone, uct.profile_picture, uct.institutions_json, uct.service_areas_json, uct.teaching_mode, uct.city_location, uct.status, uct.updated_at, uct.created_at, sp.name AS plan_name, sp.search_ranking, sp.badge_level')
+            ->join('tutor_subscriptions ts', 'ts.user_id = uct.user_id', 'inner')
+            ->join('subscription_plans sp', 'sp.id = ts.plan_id', 'left')
+            ->where('uct.status', 'approved')
+            ->where('ts.status', 'active')
+            ->where('ts.current_period_start <=', $now)
+            ->where('ts.current_period_end >=', $now)
+            ->groupBy('uct.id')
+            ->orderBy($this->universityPlanPrioritySql(), 'DESC', false)
+            ->orderBy('sp.sort_order', 'DESC')
+            ->orderBy('sp.price_monthly', 'DESC')
+            ->orderBy('uct.updated_at', 'DESC')
+            ->orderBy('uct.created_at', 'DESC')
+            ->limit($limit)
+            ->get();
+
+        $tutors = $query->getResultArray();
+
+        foreach ($tutors as &$tutor) {
+            $institutions = json_decode((string) ($tutor['institutions_json'] ?? '[]'), true);
+            $serviceAreas = json_decode((string) ($tutor['service_areas_json'] ?? '[]'), true);
+
+            $tutor['institutions_list'] = is_array($institutions)
+                ? array_values(array_filter(array_map(static fn ($item) => trim((string) $item), $institutions), static fn ($item) => $item !== ''))
+                : [];
+
+            $tutor['service_areas_list'] = is_array($serviceAreas)
+                ? array_values(array_filter(array_map(static fn ($item) => trim((string) $item), $serviceAreas), static fn ($item) => $item !== ''))
+                : [];
+        }
+
+        return $tutors;
+    }
+
+    private function universityPlanPrioritySql(): string
+    {
+        return "CASE
+            WHEN LOWER(COALESCE(sp.search_ranking, '')) IN ('top', 'highest') THEN 5
+            WHEN LOWER(COALESCE(sp.search_ranking, '')) IN ('priority', 'high') THEN 4
+            WHEN LOWER(COALESCE(sp.badge_level, '')) IN ('master', 'premium') THEN 4
+            WHEN LOWER(COALESCE(sp.badge_level, '')) IN ('expert', 'standard') THEN 3
+            WHEN LOWER(COALESCE(sp.search_ranking, '')) IN ('normal', 'medium') THEN 2
+            WHEN LOWER(COALESCE(sp.name, '')) = 'premium' THEN 4
+            WHEN LOWER(COALESCE(sp.name, '')) = 'standard' THEN 3
+            WHEN LOWER(COALESCE(sp.name, '')) = 'basic' THEN 1
+            ELSE 0
+        END";
+    }
+
     public function howItWorks()
     {
         $data = [
@@ -266,37 +333,43 @@ class Home extends BaseController
         // Get unique filter options from database
         // Districts - get distinct districts from active tutors
         $districts = $db->table('users')
-                       ->select('district')
-                       ->where('role', 'trainer')
-                       ->where('tutor_status', 'approved')
-                       ->where('is_verified', 1)
-                       ->where('is_active', 1)
-                       ->where('district !=', '')
-                       ->groupBy('district')
-                       ->orderBy('district', 'ASC')
+                       ->select('users.district')
+                       ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
+                       ->where('users.role', 'trainer')
+                       ->where('users.tutor_status', 'approved')
+                       ->where('users.is_verified', 1)
+                       ->where('users.is_active', 1)
+                       ->where('uct.id', null)
+                       ->where('users.district !=', '')
+                       ->groupBy('users.district')
+                       ->orderBy('users.district', 'ASC')
                        ->get()
                        ->getResultArray();
 
         // Teaching modes - get distinct values
         $teachingModes = $db->table('users')
-                           ->select('teaching_mode')
-                           ->where('role', 'trainer')
-                           ->where('tutor_status', 'approved')
-                           ->where('is_verified', 1)
-                           ->where('is_active', 1)
-                           ->where('teaching_mode !=', '')
-                           ->groupBy('teaching_mode')
+                           ->select('users.teaching_mode')
+                           ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
+                           ->where('users.role', 'trainer')
+                           ->where('users.tutor_status', 'approved')
+                           ->where('users.is_verified', 1)
+                           ->where('users.is_active', 1)
+                           ->where('uct.id', null)
+                           ->where('users.teaching_mode !=', '')
+                           ->groupBy('users.teaching_mode')
                            ->get()
                            ->getResultArray();
 
         // Get unique curricula from structured_subjects JSON field
         $structuredResults = $db->table('users')
-                              ->select('structured_subjects')
-                              ->where('role', 'trainer')
-                              ->where('tutor_status', 'approved')
-                              ->where('is_verified', 1)
-                              ->where('is_active', 1)
-                              ->where('structured_subjects !=', '')
+                              ->select('users.structured_subjects')
+                              ->join('university_college_tutors uct', 'uct.user_id = users.id OR uct.email = users.email OR uct.username = users.username', 'left')
+                              ->where('users.role', 'trainer')
+                              ->where('users.tutor_status', 'approved')
+                              ->where('users.is_verified', 1)
+                              ->where('users.is_active', 1)
+                              ->where('uct.id', null)
+                              ->where('users.structured_subjects !=', '')
                               ->get()
                               ->getResultArray();
 
@@ -371,6 +444,10 @@ class Home extends BaseController
 
         // Get the actual tutor ID for use in database operations
         $tutorId = $tutor['id'];
+
+        if ($this->isUniversityTutorAccount($tutor)) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
 
         // Get tutor's current active subscription
         $currentSubscription = $tutorSubscriptionModel->getActiveSubscription($tutorId);
@@ -529,6 +606,82 @@ class Home extends BaseController
         ];
 
         return view('pages/tutor-profile-professional', $data);
+    }
+
+    public function universityTutorProfile($id)
+    {
+        $tutorId = (int) $id;
+        if ($tutorId <= 0) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $universityTutorModel = new UniversityCollegeTutorModel();
+        $now = date('Y-m-d H:i:s');
+        $tutor = \Config\Database::connect()
+            ->table('university_college_tutors uct')
+            ->select('uct.*')
+            ->join('tutor_subscriptions ts', 'ts.user_id = uct.user_id', 'inner')
+            ->where('uct.id', $tutorId)
+            ->where('uct.status', 'approved')
+            ->where('ts.status', 'active')
+            ->where('ts.current_period_start <=', $now)
+            ->where('ts.current_period_end >=', $now)
+            ->groupBy('uct.id')
+            ->get()
+            ->getRowArray();
+
+        if (!$tutor) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $institutions = $universityTutorModel->decodeJsonList($tutor['institutions_json'] ?? null);
+        $serviceAreas = $universityTutorModel->decodeJsonList($tutor['service_areas_json'] ?? null);
+        $availableDays = $universityTutorModel->decodeJsonList($tutor['available_days_json'] ?? null);
+        $preferredTimes = $universityTutorModel->decodeJsonList($tutor['preferred_times_json'] ?? null);
+
+        $data = [
+            'tutor' => $tutor,
+            'institutions' => $institutions,
+            'service_areas' => $serviceAreas,
+            'available_days' => $availableDays,
+            'preferred_times' => $preferredTimes,
+            'title' => trim((string) ($tutor['full_name'] ?? 'University Tutor')) . ' - University Tutor Profile',
+            'description' => 'University tutor profile on TutorConnect Malawi',
+        ];
+
+        return view('pages/university-tutor-profile', $data);
+    }
+
+    private function isUniversityTutorAccount(array $tutor): bool
+    {
+        $userId = (int) ($tutor['id'] ?? 0);
+        $email = strtolower(trim((string) ($tutor['email'] ?? '')));
+        $username = trim((string) ($tutor['username'] ?? ''));
+
+        $builder = \Config\Database::connect()
+            ->table('university_college_tutors')
+            ->groupStart();
+
+        $hasCondition = false;
+
+        if ($userId > 0) {
+            $builder->orWhere('user_id', $userId);
+            $hasCondition = true;
+        }
+
+        if ($email !== '') {
+            $builder->orWhere('email', $email);
+            $hasCondition = true;
+        }
+
+        if ($username !== '') {
+            $builder->orWhere('username', $username);
+            $hasCondition = true;
+        }
+
+        $builder->groupEnd();
+
+        return $hasCondition && (bool) $builder->get(1)->getRowArray();
     }
 
     public function login()
