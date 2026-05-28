@@ -6,6 +6,14 @@
     <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title><?= esc($title ?? 'Admin Panel - TutorConnect Malawi') ?></title>
 
+    <?php $siteFavicon = site_setting('site_favicon', ''); ?>
+    <?php if (!empty($siteFavicon)): ?>
+        <link rel="icon" href="<?= esc(base_url('uploads/' . $siteFavicon)) ?>">
+        <link rel="shortcut icon" href="<?= esc(base_url('uploads/' . $siteFavicon)) ?>">
+    <?php else: ?>
+        <link rel="icon" type="image/x-icon" href="<?= base_url('favicon.ico') ?>">
+    <?php endif; ?>
+
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
