@@ -332,6 +332,7 @@ $routes->group('admin', ['filter' => 'auth:sub-admin'], static function ($routes
         $routes->get('university-request-matches/(:num)', 'Admin::viewUniversityRequestMatch/$1');
     $routes->get('/', 'Dashboard::index');
     $routes->get('dashboard', 'Dashboard::index');
+    $routes->get('activity', 'Dashboard::activity');
 
 
     $routes->get('users', 'Admin::users');

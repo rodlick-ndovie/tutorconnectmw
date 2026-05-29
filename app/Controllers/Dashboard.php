@@ -317,9 +317,53 @@ class Dashboard extends BaseController
             ->findAll();
 
         // Recent activity (real data from multiple tables)
-        $data['recent_activity'] = $this->getRecentActivity();
+        $data['recent_activity'] = $this->getRecentActivity(6);
 
         return view('admin/dashboard', $data);
+    }
+
+    public function activity()
+    {
+        if (!session()->get('user_id') || !in_array(session()->get('role'), ['admin', 'sub-admin'], true)) {
+            return redirect()->to('/login')->with('error', 'Please login first');
+        }
+
+        $perPageOptions = [10, 25, 50];
+        $perPage = (int) ($this->request->getGet('per_page') ?? 10);
+        if (!in_array($perPage, $perPageOptions, true)) {
+            $perPage = 10;
+        }
+
+        $page = max(1, (int) ($this->request->getGet('page') ?? 1));
+        $allActivities = $this->getRecentActivity(null);
+        $totalActivities = count($allActivities);
+        $totalPages = max(1, (int) ceil($totalActivities / $perPage));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+
+        $offset = ($page - 1) * $perPage;
+
+        return view('admin/activity_feed', [
+            'title' => 'Activity Feed - TutorConnect Malawi',
+            'dashboard_title' => 'Activity Feed',
+            'unreadMessageCount' => (new ContactMessageModel())->getUnreadCount(),
+            'user' => [
+                'username' => session()->get('username'),
+                'role' => session()->get('role'),
+                'first_name' => session()->get('first_name'),
+                'last_name' => session()->get('last_name'),
+                'email' => session()->get('email'),
+            ],
+            'activities' => array_slice($allActivities, $offset, $perPage),
+            'total_activities' => $totalActivities,
+            'per_page' => $perPage,
+            'per_page_options' => $perPageOptions,
+            'current_page' => $page,
+            'total_pages' => $totalPages,
+            'page_start' => $totalActivities > 0 ? $offset + 1 : 0,
+            'page_end' => min($offset + $perPage, $totalActivities),
+        ]);
     }
 
     private function trainerDashboard($data)
@@ -662,18 +706,25 @@ class Dashboard extends BaseController
     /**
      * Get recent activity from multiple tables for admin dashboard
      */
-    private function getRecentActivity()
+    private function getRecentActivity($limit = 6)
     {
         $db = \Config\Database::connect();
         $activities = [];
 
         try {
-            $recentUsers = $db->table('users')
-                ->select('id, username, first_name, last_name, role, created_at')
-                ->orderBy('created_at', 'DESC')
-                ->limit(3)
+            $recentUsersBuilder = $db->table('users')
+                ->select('id, username, email, first_name, last_name, role, created_at')
+                ->orderBy('created_at', 'DESC');
+
+            if ($limit !== null) {
+                $recentUsersBuilder->limit(max(10, (int) $limit));
+            }
+
+            $recentUsers = $recentUsersBuilder
                 ->get()
                 ->getResultArray();
+
+            $universityTutorLookup = $this->getUniversityTutorActivityLookup();
 
             foreach ($recentUsers as $user) {
                 $firstName = trim((string) ($user['first_name'] ?? ''));
@@ -682,26 +733,42 @@ class Dashboard extends BaseController
                 $displayName = trim($firstName . ' ' . $lastName);
                 $displayName = $displayName !== '' ? $displayName : ($username !== '' ? $username : 'A new user');
                 $createdAt = (string) ($user['created_at'] ?? date('Y-m-d H:i:s'));
+                $role = (string) ($user['role'] ?? 'user');
+                $isUniversityTutor = $role === 'trainer' && $this->isUniversityTutorActivityUser($user, $universityTutorLookup);
+                $roleTitle = $isUniversityTutor ? 'Uni Tutor' : ($role === 'trainer' ? 'Tutor' : ucfirst($role));
+                $description = $displayName . ' joined the platform';
+
+                if ($isUniversityTutor) {
+                    $description = $displayName . ' joined as a university support specialist';
+                } elseif ($role === 'trainer') {
+                    $description = $displayName . ' joined as a regular tutor';
+                }
 
                 $activities[] = [
-                    'type' => 'user_registration',
-                    'icon' => strtoupper(substr($displayName, 0, 1)),
-                    'title' => 'New ' . ucfirst((string) ($user['role'] ?? 'User')) . ' Registration',
-                    'description' => $displayName . ' joined the platform',
+                    'type' => $isUniversityTutor ? 'user_registration_university_tutor' : 'user_registration',
+                    'icon' => $isUniversityTutor ? 'U' : ($role === 'trainer' ? 'T' : strtoupper(substr($displayName, 0, 1))),
+                    'title' => 'New ' . $roleTitle . ' Registration',
+                    'description' => $description,
                     'time' => $this->timeAgo($createdAt),
+                    'date' => date('M j, Y H:i', strtotime($createdAt) ?: time()),
                     'timestamp' => strtotime($createdAt) ?: time(),
                 ];
             }
 
-            $recentSubscriptions = $db->table('tutor_subscriptions ts')
-                ->select('ts.created_at, u.first_name, u.last_name, sp.name as plan_name')
+            $recentSubscriptionsBuilder = $db->table('tutor_subscriptions ts')
+                ->select('ts.created_at, u.first_name, u.last_name, sp.name as plan_name, sp.portal_type')
                 ->join('users u', 'u.id = ts.user_id')
                 ->join('subscription_plans sp', 'sp.id = ts.plan_id')
                 ->where('ts.status', 'active')
                 ->where('ts.current_period_start <=', date('Y-m-d H:i:s'))
                 ->where('ts.current_period_end >=', date('Y-m-d H:i:s'))
-                ->orderBy('ts.created_at', 'DESC')
-                ->limit(2)
+                ->orderBy('ts.created_at', 'DESC');
+
+            if ($limit !== null) {
+                $recentSubscriptionsBuilder->limit(max(10, (int) $limit));
+            }
+
+            $recentSubscriptions = $recentSubscriptionsBuilder
                 ->get()
                 ->getResultArray();
 
@@ -709,13 +776,15 @@ class Dashboard extends BaseController
                 $subscriberName = trim((string) ($subscription['first_name'] ?? '') . ' ' . (string) ($subscription['last_name'] ?? ''));
                 $subscriberName = $subscriberName !== '' ? $subscriberName : 'A tutor';
                 $createdAt = (string) ($subscription['created_at'] ?? date('Y-m-d H:i:s'));
+                $isUniversityPlan = ($subscription['portal_type'] ?? 'trainer') === 'university';
 
                 $activities[] = [
-                    'type' => 'subscription',
-                    'icon' => 'S',
-                    'title' => 'Subscription Activated',
+                    'type' => $isUniversityPlan ? 'university_subscription' : 'subscription',
+                    'icon' => $isUniversityPlan ? 'U' : 'S',
+                    'title' => $isUniversityPlan ? 'Uni Tutor Subscription Activated' : 'Tutor Subscription Activated',
                     'description' => $subscriberName . ' activated ' . ($subscription['plan_name'] ?? 'a subscription') . ' plan',
                     'time' => $this->timeAgo($createdAt),
+                    'date' => date('M j, Y H:i', strtotime($createdAt) ?: time()),
                     'timestamp' => strtotime($createdAt) ?: time(),
                 ];
             }
@@ -727,6 +796,7 @@ class Dashboard extends BaseController
                     'title' => 'System Initialized',
                     'description' => 'TutorConnect Malawi platform is ready',
                     'time' => 'Just now',
+                    'date' => date('M j, Y H:i'),
                     'timestamp' => time(),
                 ],
             ];
@@ -736,7 +806,61 @@ class Dashboard extends BaseController
             return ($b['timestamp'] ?? 0) <=> ($a['timestamp'] ?? 0);
         });
 
-        return array_slice($activities, 0, 6);
+        return $limit === null ? $activities : array_slice($activities, 0, (int) $limit);
+    }
+
+    private function getUniversityTutorActivityLookup(): array
+    {
+        $db = \Config\Database::connect();
+        $lookup = [
+            'by_user_id' => [],
+            'by_email' => [],
+            'by_username' => [],
+        ];
+
+        try {
+            $profiles = $db->table('university_college_tutors')
+                ->select('id, user_id, email, username')
+                ->get()
+                ->getResultArray();
+
+            foreach ($profiles as $profile) {
+                $userId = (int) ($profile['user_id'] ?? 0);
+                if ($userId > 0) {
+                    $lookup['by_user_id'][$userId] = true;
+                }
+
+                $email = strtolower(trim((string) ($profile['email'] ?? '')));
+                if ($email !== '') {
+                    $lookup['by_email'][$email] = true;
+                }
+
+                $username = trim((string) ($profile['username'] ?? ''));
+                if ($username !== '') {
+                    $lookup['by_username'][$username] = true;
+                }
+            }
+        } catch (\Throwable $e) {
+            return $lookup;
+        }
+
+        return $lookup;
+    }
+
+    private function isUniversityTutorActivityUser(array $user, array $lookup): bool
+    {
+        $userId = (int) ($user['id'] ?? 0);
+        if ($userId > 0 && isset($lookup['by_user_id'][$userId])) {
+            return true;
+        }
+
+        $email = strtolower(trim((string) ($user['email'] ?? '')));
+        if ($email !== '' && isset($lookup['by_email'][$email])) {
+            return true;
+        }
+
+        $username = trim((string) ($user['username'] ?? ''));
+        return $username !== '' && isset($lookup['by_username'][$username]);
     }
 
     /**

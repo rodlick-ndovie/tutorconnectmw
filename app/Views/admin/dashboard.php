@@ -238,6 +238,9 @@
             <h3 class="section-title">Recent Activity</h3>
             <p class="section-subtitle">Latest platform actions and updates from across the system.</p>
         </div>
+        <a href="<?= base_url('admin/activity') ?>" class="activity-view-all-link">
+            View All <i class="fas fa-arrow-right ms-1"></i>
+        </a>
     </div>
 
     <?php if (!empty($recent_activity)): ?>
@@ -788,6 +791,28 @@
 
 .recent-activity-header {
     margin-bottom: 10px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.activity-view-all-link {
+    align-self: center;
+    border: 1px solid rgba(30, 64, 175, 0.18);
+    border-radius: 10px;
+    color: var(--admin-primary);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 13px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.activity-view-all-link:hover {
+    background: rgba(30, 64, 175, 0.08);
+    color: var(--admin-primary);
 }
 
 .recent-activity-list {
