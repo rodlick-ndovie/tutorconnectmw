@@ -1,0 +1,40 @@
+# Disable directory browsing
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    Options +FollowSymlinks
+    RewriteEngine On
+
+    # NOTE: do NOT hardcode "RewriteBase /". The app is served from a subfolder
+    # locally (/tutorconnect_live/website/public/), and "RewriteBase /" made the
+    # "index.php" target resolve against the document root — serving WAMP's own
+    # homepage instead of CodeIgniter, so every route except "/" 404'd.
+    # With no RewriteBase, Apache resolves index.php relative to THIS directory,
+    # which is correct both in the subfolder and in production (docroot = public).
+
+    # Remove trailing slashes
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Force non-www (optional)
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+    RewriteRule ^ http://%1%{REQUEST_URI} [R=301,L]
+
+    # Send all requests to index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php/$1 [L,QSA]
+
+    # Authorization header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP_AUTHORIZATION}]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    ErrorDocument 404 index.php
+</IfModule>
+
+# Hide server signature
+ServerSignature Off
