@@ -1,0 +1,22 @@
+# EAS Build archives the ENTIRE git repo by default. This repo is a monorepo
+# whose root is also a PHP/CodeIgniter website, with a Node backend under
+# mobile-app/backend — none of which the React Native app build needs.
+#
+# So: ignore everything, then re-include ONLY mobile-app/frontend (the app).
+# This drops the upload from ~411 MB to just the app source + assets.
+
+# 1) Ignore every top-level entry (files, folders, and dotfiles like .git).
+/*
+/.*
+
+# 2) Re-include the path down to the mobile app frontend.
+!/mobile-app
+/mobile-app/*
+!/mobile-app/frontend
+
+# 3) Inside the frontend, still drop things EAS rebuilds or doesn't need.
+mobile-app/frontend/node_modules/
+mobile-app/frontend/.expo/
+mobile-app/frontend/dist/
+mobile-app/frontend/web-build/
+mobile-app/frontend/.env
